@@ -1,0 +1,12 @@
+Version: 0.0.2
+Project Status: PRE-ALPHA
+
+What is this?
+=============
+
+Strat is a simple Haskell project that intends to be a turn-based strategy game, using SDL for 2d hex-tile graphics, with multi player ability and AI for single player.
+
+Right now, strat barely does anything. It's the focus of my SDL game series on my blog where I discuss how I implemented it, from start to finish. I hope it will serve as a useful guide to practical game programming in Haskell and, secondarilly, as a decent example of code to learn from.
+
+You can read more on my blog, starting with the first part of the series:
+http://www.animal-machine.com/blog/2010/04/getting-started-with-sdl-in-haskell/
