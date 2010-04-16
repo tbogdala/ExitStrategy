@@ -1,0 +1,24 @@
+Strat version history
+
+Version 0.0.2 (current)
+=============
+
+* Git repository created.
+* Changed art file locations.
+* Changed TerrainType order and prefix on the enum.
+* Added mapCoordinates to use as keys into the TerrainMap.
+* Changed eventLoop to process all events until none are
+  available, only then call redrawScreen and waitEvent.
+  Considerable speed up.
+* loadArt now calls SDL.displayFormatAlpha on loaded pngs.
+* SurfaceFlags now passed to main's setVideoMode.
+
+
+
+Version 0.0.1 (April 06, 2010)
+=============
+
+* Initial version of game described in part 2 of my
+  SDL game series:
+
+  http://www.animal-machine.com/blog/2010/04/sdl-and-game-state/

@@ -1,0 +1,6 @@
+*~
+dist/
+#*
+*.hp
+*.prof
+*.aux
