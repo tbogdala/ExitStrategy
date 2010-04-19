@@ -20,6 +20,6 @@ Data-Files:          art/64x74/water.png, art/64x74/desert.png, art/64x74/forres
 
 Executable strat
   Main-is:           Strat.lhs
-  Other-modules:     UIState
-  Build-Depends:     base >= 4, containers, random, SDL, SDL-image
+  Other-modules:     UI, UIState, UIConsole
+  Build-Depends:     base >= 4, containers, random, SDL, SDL-image, SDL-ttf
 

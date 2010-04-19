@@ -7,7 +7,10 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 > import qualified Control.Monad as CM
 > import qualified Graphics.UI.SDL as SDL
 > import qualified Graphics.UI.SDL.Image as SDLi
+> import qualified Graphics.UI.SDL.TTF as SDLt
 
+> import UI
+> import UIConsole
 > import UIState
 
 
@@ -83,8 +86,12 @@ Note that it does not update the destination surface, which will neeed
 to be flipped before the effects of this function can be seen.
 
 > drawTile :: UIState -> Point -> IO ()
-> drawTile (UIState vp _ mainSurf terrainSurfs tm) (x,y) = do
->      let sr = Just (SDL.Rect 0 0 tileWidth tileHeight)
+> drawTile ui (x,y) = do
+>      let vp = uiViewPort ui
+>          mainSurf = uiMainSurface ui
+>          terrainSurfs = uiTerrainSurfaces ui
+>          tm = uiTerrainMap ui
+>          sr = Just (SDL.Rect 0 0 tileWidth tileHeight)
 >          (tX, tY) = gamePoint2View vp $ getHexmapOffset tileWidth tileHeight x y
 >	   dr = Just $ SDL.Rect tX tY 0 0
 >      	   tt = DM.fromJust $ DMap.lookup (x,y) tm
@@ -143,57 +150,105 @@ The main worker beast for the program.
 > main :: IO ()
 > main = do 
 >      SDL.init [SDL.InitEverything]
->      SDL.setVideoMode windowWidth windowHeight 32 [SDL.HWSurface, SDL.DoubleBuf] 
->      SDL.setCaption "Video Test!" "video test"
+>      SDLt.init
+>      SDL.enableUnicode True 
+>      SDL.setVideoMode windowWidth windowHeight 32 
+>                       [SDL.HWSurface, SDL.DoubleBuf] 
+>      SDL.setCaption "STRAT" "STRAT"
 >
 >      mainSurf <- SDL.getVideoSurface
 >      tileSurfs <- loadArt artFilePaths
 >      randomMap <- makeRandomMap mapColumns mapRows
 >
->      let initialUI = UIState (ViewPort 0 0 windowWidth windowHeight) [] mainSurf tileSurfs randomMap
+>      font <- SDLt.openFont "art/fonts/VeraMono.ttf" 16
+>      uiConsole <- createUIConsole 0 0 550 300 font
+>      let initialUI = UIState (ViewPort 0 0 windowWidth windowHeight) 
+>                              [] mainSurf tileSurfs randomMap 
+>                              uiConsole False defaultKeyHandler
 >      eventLoop initialUI 
 >
 >      mapM_ freeSurf tileSurfs
+>      SDL.enableUnicode False
 >      SDL.quit
 >      putStrLn "done"
 >  where
 >      freeSurf (_ , s) = SDL.freeSurface s
->      eventLoop ui = do
->          e <- SDL.pollEvent
->	   checkEvent ui e
->      checkEvent ui (SDL.NoEvent) = do	   
->      	   redrawScreen ui
->          e <- SDL.waitEvent 
->	   checkEvent ui e
->      checkEvent ui (SDL.KeyUp _) = return ()
->      checkEvent ui (SDL.MouseMotion _ _ xr yr ) = do
->	   if elem SDL.ButtonRight $ uiMouseButtonsDown ui
->              then eventLoop ui'
->	       else eventLoop ui
->	 where	
->          ui' = ui { uiViewPort = updatedVP }
->	   updatedVP = vp { vpX = x', vpY = y' }
->	   vp = uiViewPort ui
->	   x' = (vpX vp) + fromIntegral xr
->	   y' = (vpY vp) + fromIntegral yr
->      checkEvent ui (SDL.MouseButtonDown _ _ b) = do
->          let mbs = uiMouseButtonsDown ui
->          eventLoop $ ui { uiMouseButtonsDown = mbs ++ [b] }
->      checkEvent ui (SDL.MouseButtonUp _ _ b) = do
->          let mbs = uiMouseButtonsDown ui
->	   let mbs' = filter (\i -> if i == b then False else True) mbs
->          eventLoop $ ui { uiMouseButtonsDown = mbs' }
->      checkEvent ui _	    = eventLoop ui
 
 
-This redraws the entire screen. 
+> eventLoop :: UIState -> IO ()
+> eventLoop ui = do
+>     e <- SDL.pollEvent
+>     case e of
+>         SDL.NoEvent -> do
+>             redrawScreen ui
+>             eventLoop ui
+>         SDL.KeyDown _ -> do
+>             jui <- (uiKeyDownHandler ui) ui e
+>             case jui of
+>                 DM.Nothing -> return ()
+>                 DM.Just ui' -> eventLoop ui'
+>         SDL.MouseMotion _ _ xr yr -> do
+>             if elem SDL.ButtonRight $ uiMouseButtonsDown ui
+>                 then eventLoop ui'
+>	          else eventLoop ui
+>             where	
+>                 ui' = ui { uiViewPort = updatedVP }
+>                 updatedVP = vp { vpX = x', vpY = y' }
+>                 vp = uiViewPort ui
+>                 x' = (vpX vp) + fromIntegral xr
+>                 y' = (vpY vp) + fromIntegral yr
+>         SDL.MouseButtonDown _ _ b -> do
+>             let mbs = uiMouseButtonsDown ui
+>             eventLoop $ ui { uiMouseButtonsDown = mbs ++ [b] }
+>         SDL.MouseButtonUp _ _ b -> do
+>             let mbs = uiMouseButtonsDown ui
+>	      let mbs' = filter (\i -> if i == b then False else True) mbs
+>             eventLoop $ ui { uiMouseButtonsDown = mbs' }
+>         _ -> do eventLoop ui
+
+
+
+> defaultKeyHandler :: UIState ->  SDL.Event -> IO (DM.Maybe UIState)
+> defaultKeyHandler ui (SDL.KeyDown (SDL.Keysym SDL.SDLK_q _ _)) = do
+>     return Nothing
+> defaultKeyHandler ui (SDL.KeyDown (SDL.Keysym SDL.SDLK_BACKQUOTE _ _)) = do
+>     return $ Just $ toggleConsole ui
+> defaultKeyHandler ui _ = do return $ Just ui
+
+> consoleKeyHandler :: UIState -> SDL.Event -> IO (DM.Maybe UIState)
+> consoleKeyHandler ui (SDL.KeyDown (SDL.Keysym SDL.SDLK_BACKQUOTE _ _)) = do
+>     return $ Just $ toggleConsole ui
+> consoleKeyHandler ui (SDL.KeyDown ks@(SDL.Keysym k _ key)) = do
+>     let c' = addTextToConsole (uiConsole ui) [key]
+>     return $ Just ui { uiConsole = c' }
+
+> toggleConsole :: UIState -> UIState
+> toggleConsole ui =  if uiConsoleVisible ui
+>                         then ui { uiConsoleVisible = False , uiKeyDownHandler = defaultKeyHandler } 
+>                         else ui { uiConsoleVisible = True , uiKeyDownHandler = consoleKeyHandler }
+
+This redraws the entire screen. This is done in layers.
 
 > redrawScreen ::  UIState -> IO ()
-> redrawScreen ui@(UIState vp _ mainSurf terrainSurfs terrainMap) = do
->     SDL.fillRect mainSurf Nothing (SDL.Pixel 0)
+> redrawScreen ui = do
+>     drawMapToScreen ui
+>     drawUIToScreen ui
+>     SDL.flip $ uiMainSurface ui
+
+> drawUIToScreen :: UIState -> IO Bool
+> drawUIToScreen ui = do
+>     if (uiConsoleVisible ui)
+>         then drawConsole (uiMainSurface ui) (uiConsole ui)
+>         else return False
+
+Draw the tile map onto the screen.
+
+> drawMapToScreen :: UIState -> IO ()
+> drawMapToScreen ui = do
+>     SDL.fillRect (uiMainSurface ui) Nothing (SDL.Pixel 0)
 >     mapM_ (drawTile ui) mapCoordinates
->     SDL.flip mainSurf
->     return ()  
+
+
 
 
 This function converts between a 'game Point' - which is the coordinate in

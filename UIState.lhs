@@ -3,43 +3,13 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 
 > module UIState where
 
+> import qualified Data.Maybe as DM
 > import qualified Data.Map as DMap
 > import qualified Graphics.UI.SDL as SDL
+> import qualified Graphics.UI.SDL.TTF as SDLt
 
-
-The TerrainType enumeration is used as the key for TerrainSurfaces,
-for easy access to the SDL Surface. The TerrainMap has the TerrainType
-as a value indexed by a 2d point.
-
-> data TerrainType = TT_Water | TT_Grass | TT_Mountain | TT_Forrest |
->      		     TT_Hills | TT_Desert
->      deriving (Bounded, Eq, Enum, Ord, Show)
-
-Simple definitions to get the max index for the TerrainType enum,
-and a list of all enumeration values.
-
-> terrainMaxBound :: Int
-> terrainMaxBound = fromEnum (maxBound :: TerrainType)
-
-> terrainTypes :: [TerrainType]
-> terrainTypes = enumFrom TT_Water
-
-For now, TerrainMap is linked directly to a TerrainType by
-map coordinates.
-
-> type Point = (Int, Int)
-> type TerrainSurfaces = [(TerrainType, SDL.Surface)]
-> type TerrainMap = DMap.Map Point TerrainType
-
-
-The ViewPort keeps track of the user's view.
-
-> data ViewPort = ViewPort {
->      	      		   vpX :: Int,
->			   vpY :: Int,
-> 			   vpWidth :: Int, 
->			   vpHeight :: Int
->     	      		   }
+> import UI
+> import UIConsole
 
 
 All of the state related to user interface is kept here
@@ -55,5 +25,8 @@ uiTerrainSurfaces must be released when exiting game.
 >			 uiMouseButtonsDown :: [SDL.MouseButton],
 >			 uiMainSurface :: SDL.Surface,
 > 			 uiTerrainSurfaces :: TerrainSurfaces,
->			 uiTerrainMap :: TerrainMap
+>			 uiTerrainMap :: TerrainMap,
+>                        uiConsole :: UIConsole,
+>                        uiConsoleVisible :: Bool,
+>                        uiKeyDownHandler :: (UIState -> SDL.Event -> IO (DM.Maybe UIState))
 >			 }

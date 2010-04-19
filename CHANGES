@@ -1,8 +1,19 @@
 Strat version history
 
+
+Current
+=======
+
+* Implemented UIConsole basics. Displays and accepts text.
+* Refactored some code from UIState to UI
+* Added Bitstream Vera monospace font - license included.
+* Cleaned up the eventLoop function.
+
+
 Version 0.0.2 (current)
 =============
 
+* Added README
 * Git repository created.
 * Changed art file locations.
 * Changed TerrainType order and prefix on the enum.
