@@ -9,9 +9,8 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 > import qualified Graphics.UI.SDL.Image as SDLi
 > import qualified Graphics.UI.SDL.TTF as SDLt
 
-> import UI
+> import UITypes
 > import UIConsole
-> import UIState
 
 
 List all of the art files that will be used.
@@ -35,14 +34,9 @@ Define constants used for this demo related to art and video.
 > windowHeight = 480
 > mapRows = 100
 > mapColumns = 100
-
-
-This generates a list of map coordinates based off of the
-mapRows and mapColumns defined above.
-
-> mapCoordinates :: [Point]
-> mapCoordinates = [(x,y) | x <- [1..mapRows]
-> 	   	   	  , y <- [1..mapColumns]]
+> gameFontFile = "art/fonts/VeraMono.ttf"
+> consoleWidth = 640
+> consoleHeight = 200
 
 
 Generates a variable length list of random TerrainType values.
@@ -109,8 +103,8 @@ Then it checks for collion between te view rectangle of
   (0, 0) - (vpW, vpH) and the tile rectangle of
   (pX, pY) - (pX', pY').
 
-> tileInViewPort :: ViewPort -> Int -> Int -> Point -> Bool
-> tileInViewPort (ViewPort _ _ vpW vpH) tileW tileH (pX , pY) = 
+> tileInViewPort :: SDL.Rect -> Int -> Int -> Point -> Bool
+> tileInViewPort (SDL.Rect _ _ vpW vpH) tileW tileH (pX , pY) = 
 >     let pX' = pX + tileW
 >	  pY' = pY + tileH
 >     in
@@ -160,10 +154,10 @@ The main worker beast for the program.
 >      tileSurfs <- loadArt artFilePaths
 >      randomMap <- makeRandomMap mapColumns mapRows
 >
->      font <- SDLt.openFont "art/fonts/VeraMono.ttf" 16
->      uiConsole <- createUIConsole 0 0 550 300 font
->      let initialUI = UIState (ViewPort 0 0 windowWidth windowHeight) 
->                              [] mainSurf tileSurfs randomMap 
+>      font <- SDLt.openFont gameFontFile 16
+>      uiConsole <- createUIConsole 0 0 consoleWidth consoleHeight font
+>      let initialUI = UIState (SDL.Rect 0 0 windowWidth windowHeight) 
+>                              [] mainSurf tileSurfs randomMap (mapColumns, mapRows)
 >                              uiConsole False defaultKeyHandler
 >      eventLoop initialUI 
 >
@@ -193,10 +187,10 @@ The main worker beast for the program.
 >	          else eventLoop ui
 >             where	
 >                 ui' = ui { uiViewPort = updatedVP }
->                 updatedVP = vp { vpX = x', vpY = y' }
+>                 updatedVP = vp { SDL.rectX = x', SDL.rectY = y' }
 >                 vp = uiViewPort ui
->                 x' = (vpX vp) + fromIntegral xr
->                 y' = (vpY vp) + fromIntegral yr
+>                 x' = (SDL.rectX vp) + fromIntegral xr
+>                 y' = (SDL.rectY vp) + fromIntegral yr
 >         SDL.MouseButtonDown _ _ b -> do
 >             let mbs = uiMouseButtonsDown ui
 >             eventLoop $ ui { uiMouseButtonsDown = mbs ++ [b] }
@@ -218,14 +212,22 @@ The main worker beast for the program.
 > consoleKeyHandler :: UIState -> SDL.Event -> IO (DM.Maybe UIState)
 > consoleKeyHandler ui (SDL.KeyDown (SDL.Keysym SDL.SDLK_BACKQUOTE _ _)) = do
 >     return $ Just $ toggleConsole ui
-> consoleKeyHandler ui (SDL.KeyDown ks@(SDL.Keysym k _ key)) = do
->     let c' = addTextToConsole (uiConsole ui) [key]
+> consoleKeyHandler ui (SDL.KeyDown (SDL.Keysym SDL.SDLK_RETURN _ _ )) = do
+>     return $ Just $ processCurrentLine ui
+> consoleKeyHandler ui (SDL.KeyDown (SDL.Keysym SDL.SDLK_BACKSPACE _ _)) = do
+>     let c' = removeLastChar (uiConsole ui)
+>     return $ Just ui { uiConsole = c' }
+> consoleKeyHandler ui (SDL.KeyDown (SDL.Keysym _ _ key)) = do
+>     let c' = addCharToConsole (uiConsole ui) key
 >     return $ Just ui { uiConsole = c' }
 
+
+
 > toggleConsole :: UIState -> UIState
-> toggleConsole ui =  if uiConsoleVisible ui
->                         then ui { uiConsoleVisible = False , uiKeyDownHandler = defaultKeyHandler } 
->                         else ui { uiConsoleVisible = True , uiKeyDownHandler = consoleKeyHandler }
+> toggleConsole ui =  
+>     if uiConsoleVisible ui
+>      then ui { uiConsoleVisible = False , uiKeyDownHandler = defaultKeyHandler } 
+>      else ui { uiConsoleVisible = True , uiKeyDownHandler = consoleKeyHandler }
 
 This redraws the entire screen. This is done in layers.
 
@@ -246,7 +248,7 @@ Draw the tile map onto the screen.
 > drawMapToScreen :: UIState -> IO ()
 > drawMapToScreen ui = do
 >     SDL.fillRect (uiMainSurface ui) Nothing (SDL.Pixel 0)
->     mapM_ (drawTile ui) mapCoordinates
+>     mapM_ (drawTile ui) $ mapCoordinates $ uiTerrainMapSize ui
 
 
 
@@ -255,7 +257,7 @@ This function converts between a 'game Point' - which is the coordinate in
 the game map - to a 'view Point' which is translocated to be relative to the
 viewport.
 
-> gamePoint2View :: ViewPort -> Point -> Point
-> gamePoint2View (ViewPort vpx vpy _ _) (gx , gy) = 
+> gamePoint2View :: SDL.Rect -> Point -> Point
+> gamePoint2View (SDL.Rect vpx vpy _ _) (gx , gy) = 
 >     ((gx + vpx) , (gy + vpy))
 		

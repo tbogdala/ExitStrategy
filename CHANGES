@@ -1,16 +1,19 @@
 Strat version history
 
+Version 0.0.3 (current)
+=============
 
-Current
-=======
-
+* Merged UIState and UIConsole into UITypes to avoid cyclic module refs
+  that I have no idea how to fix without weird tactics (hs-boot).
+  UIConsole contains the functions related to the console.
 * Implemented UIConsole basics. Displays and accepts text.
-* Refactored some code from UIState to UI
+  Functions implemented:
+     :mapsize x y
 * Added Bitstream Vera monospace font - license included.
 * Cleaned up the eventLoop function.
 
 
-Version 0.0.2 (current)
+Version 0.0.2 
 =============
 
 * Added README
