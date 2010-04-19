@@ -32,8 +32,8 @@ Define constants used for this demo related to art and video.
 > tileHeight = 74
 > windowWidth = 640
 > windowHeight = 480
-> mapRows = 100
-> mapColumns = 100
+> mapRows = 10
+> mapColumns = 10
 > gameFontFile = "art/fonts/VeraMono.ttf"
 > consoleWidth = 640
 > consoleHeight = 200
@@ -183,14 +183,24 @@ The main worker beast for the program.
 >                 DM.Just ui' -> eventLoop ui'
 >         SDL.MouseMotion _ _ xr yr -> do
 >             if elem SDL.ButtonRight $ uiMouseButtonsDown ui
->                 then eventLoop ui'
+>                 then do
+>                      eventLoop ui'
 >	          else eventLoop ui
 >             where	
 >                 ui' = ui { uiViewPort = updatedVP }
->                 updatedVP = vp { SDL.rectX = x', SDL.rectY = y' }
 >                 vp = uiViewPort ui
->                 x' = (SDL.rectX vp) + fromIntegral xr
->                 y' = (SDL.rectY vp) + fromIntegral yr
+>                 updatedVP = vp { SDL.rectX = x', SDL.rectY = y' }
+>                 x' = fix tolXNeg tolXPos $ (SDL.rectX vp) - fromIntegral xr
+>                 y' = fix tolYNeg tolYPos $ (SDL.rectY vp) - fromIntegral yr
+>                 (tW, tH) = (uiTerrainMapSize ui)
+>                 tolXNeg = 0 - (round $ 0.8 * toRational windowWidth)
+>                 tolXPos = (tW - 1) * tileWidth 
+>                 tolYNeg = 0 - (round $ 0.8 * toRational windowHeight)
+>                 tolYPos = (tH - 1) * ( round $ 0.75 *  toRational tileHeight)
+>                 fix n p x
+>                      | x < n = n
+>                      | x > p = p
+>                      | otherwise = x
 >         SDL.MouseButtonDown _ _ b -> do
 >             let mbs = uiMouseButtonsDown ui
 >             eventLoop $ ui { uiMouseButtonsDown = mbs ++ [b] }
@@ -259,5 +269,5 @@ viewport.
 
 > gamePoint2View :: SDL.Rect -> Point -> Point
 > gamePoint2View (SDL.Rect vpx vpy _ _) (gx , gy) = 
->     ((gx + vpx) , (gy + vpy))
+>     ((gx - vpx) , (gy - vpy))
 		

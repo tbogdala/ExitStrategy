@@ -37,8 +37,8 @@ This generates a list of map coordinates based off of the
 size passed in (columns, rows).
 
 > mapCoordinates :: (Int , Int) -> [Point]
-> mapCoordinates (c , r) = [(x,y) | x <- [1..r]
-> 	   	   	      , y <- [1..c]]
+> mapCoordinates (c , r) = [(x,y) | x <- [1..c]
+> 	      	   	          , y <- [1..r]]
 
 
 All of the state related to user interface is kept here

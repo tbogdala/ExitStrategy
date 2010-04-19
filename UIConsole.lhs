@@ -4,7 +4,6 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 > module UIConsole where
 
 > import Data.Char (isAlphaNum, isSpace, isPunctuation)
-> import Control.Monad (foldM)
 > import qualified Data.Maybe as DM
 > import qualified Data.Map as DMap
 > import qualified Graphics.UI.SDL as SDL
