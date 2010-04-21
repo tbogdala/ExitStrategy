@@ -1,0 +1,48 @@
+{
+  "resolutions": 
+  [ 
+    {
+      "dirPath":"art/64x74/",
+      "tileWidth": 64,
+      "tileHeight": 74
+    },
+    {
+      "dirPath":"art/128x148/",
+      "tileWidth": 128,
+      "tileHeight": 148
+    },
+    {
+      "dirPath":"art/32x37/",
+      "tileWidth": 32,
+      "tileHeight": 37
+    }
+  ], 
+  "tiles":
+  [
+    {   
+      "name":"water",
+      "fileName":"water.png"
+    },
+    {
+      "name":"grass",
+      "fileName":"grass.png"
+    },
+    {   
+      "name":"hills",
+      "fileName":"hills.png"
+    },
+    {   
+      "name":"mountain",
+      "fileName":"mountain.png"
+    },
+    {   
+      "name":"desert",
+      "fileName":"desert.png"
+    },
+    {   
+      "name":"forrest",
+      "fileName":"forrest.png"
+    }
+  ]
+}
+

@@ -8,18 +8,17 @@ License-file:        LICENSE
 Author:              Timothy Bogdala
 Maintainer:          tdb@animal-machine.com
 Build-Type:          Simple
-Cabal-Version:       >=1.4
+Cabal-Version:       >=1.6
 Category:	     Game
 Homepage:	     http://www.animal-machine.com
 
-Data-Files:          art/64x74/water.png, art/64x74/desert.png, art/64x74/forrest.png,
-		     art/64x74/grass.png, art/64x74/hills.png, art/64x74/mountain.png,
-		     art/svg/tile_base.svg, art/svg/tile_forrest.svg, art/svg/tile_hills.svg,
-		     art/svg/tile_water.svg, art/svg/tile_desert.svg, art/svg/tile_grass.svg,
-		     art/svg/tile_mountain.svg
+Data-Files:          art/64x74/*.png, art/32x37/*.png, art/128x148/*.png, 
+		     art/fonts/VeraMono.ttf,art/fonts/VeraMono-COPYRIGHT.TXT,
+		     art/svg/*.svg
 
 Executable strat
   Main-is:           Strat.lhs
-  Other-modules:     UITypes, UIConsole
-  Build-Depends:     base >= 4, containers, random, SDL, SDL-image, SDL-ttf
+  Other-modules:     UITypes, UIConsole, TileSet
+  Build-Depends:     base >= 4, containers, random, SDL, SDL-image, SDL-ttf,
+                     json
 

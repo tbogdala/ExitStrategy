@@ -10,3 +10,15 @@ Right now, strat barely does anything. It's the focus of my SDL game series on m
 
 You can read more on my blog, starting with the first part of the series:
 http://www.animal-machine.com/blog/2010/04/getting-started-with-sdl-in-haskell/
+
+Input Commands:
+
+Key  -> Action
+`    -> Opens console
+q    -> Quits program
+
+
+Console functions:
+
+:mapsize <x> <y>
+    (e.g. ":mapsize 10 10" to switch to a 10x10 map)

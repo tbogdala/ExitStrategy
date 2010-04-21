@@ -78,6 +78,9 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 >             SDL.freeSurface textSurf
 >             return $ Just t
 
+
+FIXME: Hardcoded to default to "water"
+
 > runCommand :: [String] -> UIState -> UIState
 > runCommand (":test" : args) ui = ui { uiConsole = newConsole }
 >     where c = (uiConsole ui)
@@ -93,6 +96,8 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 >         newMap = DMap.union cutdownMap defaultMap
 >         defaultMap = foldr makeDefault DMap.empty (mapCoordinates (w,h))
 >         makeDefault coord m =
->               DMap.insert coord (head terrainTypes) m
+>               DMap.insert coord "water" m
+
+The default implementation does nothing.
  
 > runCommand (cmd : args) ui = ui

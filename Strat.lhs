@@ -9,69 +9,69 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 > import qualified Graphics.UI.SDL.Image as SDLi
 > import qualified Graphics.UI.SDL.TTF as SDLt
 
+> import Text.JSON
+
 > import UITypes
 > import UIConsole
-
-
-List all of the art files that will be used.
-
-NOTE: Must be defined in the same order as the
-TerrainType enumeration!
-
-> artFilePaths = [ "art/64x74/water.png",
->  	       	   "art/64x74/grass.png",
->		   "art/64x74/mountain.png",
->		   "art/64x74/forrest.png",
->		   "art/64x74/hills.png",
->		   "art/64x74/desert.png" ]
+> import TileSet as TS
 
 
 Define constants used for this demo related to art and video.
 
-> tileWidth = 64
-> tileHeight = 74
 > windowWidth = 640
 > windowHeight = 480
-> mapRows = 10
-> mapColumns = 10
+> mapRows = 30
+> mapColumns = 30
 > gameFontFile = "art/fonts/VeraMono.ttf"
+> defaultTileSetFP = "art/Default.tiles"
 > consoleWidth = 640
 > consoleHeight = 200
 
 
 Generates a variable length list of random TerrainType values.
 
-> getRandomTerrain :: Int -> IO [TerrainType]
-> getRandomTerrain l = do
->     randomNumbers <- CM.replicateM l $ R.randomRIO (0,terrainMaxBound)
->     return $ map toEnum randomNumbers
+> getRandomTerrain :: TileSet -> Int -> IO [TerrainType]
+> getRandomTerrain ts l = do
+>     randomNumbers <- CM.replicateM l $ R.randomRIO (0,(setLength-1))
+>     return $ map (\i -> TS.mtName $ (TS.tsTiles ts) !! i) randomNumbers
+>   where
+>     setLength = length $ TS.tsTiles ts
 
 
 Creates a random 2d map.
 
-> makeRandomMap :: Int -> Int -> IO (TerrainMap)
-> makeRandomMap w h = do
+> makeRandomMap :: TileSet -> Int -> Int -> IO (TerrainMap)
+> makeRandomMap ts w h = do
 >    CM.foldM (\m y -> makeRow w y m) DMap.empty [1..h]
 >   where
 >      makeRow :: Int -> Int -> TerrainMap -> IO (TerrainMap)
 >      makeRow w y tileMap = do
->	   rt <- getRandomTerrain w
+>	   rt <- getRandomTerrain ts w
 >	   let tp = zip [1..w] rt
 >	   return $ foldr (\(x,t) m -> DMap.insert (x,y) t m)  tileMap tp
 
 
 In an IO action, load all of the artwork used in the map.
 
-> loadArt :: [String] -> IO TerrainSurfaces
-> loadArt paths = do
->      tileSurfs <- mapM loadFile paths
->      return $ zip terrainTypes tileSurfs
+tileSurfs loads all tiles in a given directory (dirFP)
+loadFile will load a given file (mt) in a given directory (resInfo.dirPath)
+
+> loadArt :: TileSet -> IO [(TS.ResolutionInfo, TerrainSurfaces)]
+> loadArt tileSet = do
+>     let mapTiles = (TS.tsTiles tileSet)
+>     allSurfs <- mapM (tileSurfs mapTiles) $ TS.tsResolutions tileSet
+>     return allSurfs
 >   where
->      loadFile p = do
->                   s  <- SDLi.load p
->                   s' <- SDL.displayFormatAlpha s
->                   SDL.freeSurface s
->                   return s'
+>     tileSurfs tiles resInfo = do
+>         tsurfs <- mapM (loadFile resInfo) tiles
+>         return (resInfo, tsurfs)
+>     loadFile resInfo mt = do
+>         s  <- SDLi.load $ (TS.riDirPath resInfo) ++ (TS.mtFileName mt)
+>         s' <- SDL.displayFormatAlpha s
+>         SDL.freeSurface s
+>         return ((TS.mtName mt), s')
+
+
 
 This method draws the TerrainType associated Surface onto another
 surface (probably the main screen).
@@ -84,12 +84,15 @@ to be flipped before the effects of this function can be seen.
 >      let vp = uiViewPort ui
 >          mainSurf = uiMainSurface ui
 >          terrainSurfs = uiTerrainSurfaces ui
+>          resSurfs = currentResolution ui
+>          tileWidth = TS.riTileWidth $ fst resSurfs
+>          tileHeight = TS.riTileHeight $ fst resSurfs
 >          tm = uiTerrainMap ui
 >          sr = Just (SDL.Rect 0 0 tileWidth tileHeight)
 >          (tX, tY) = gamePoint2View vp $ getHexmapOffset tileWidth tileHeight x y
 >	   dr = Just $ SDL.Rect tX tY 0 0
 >      	   tt = DM.fromJust $ DMap.lookup (x,y) tm
->      	   terrainSurf = DM.fromJust $ lookup tt terrainSurfs
+>      	   terrainSurf = DM.fromJust $ lookup tt $ snd resSurfs
 >      if tileInViewPort vp tileWidth tileHeight (tX,tY)
 >          then do
 >	   	 SDL.blitSurface terrainSurf sr mainSurf dr
@@ -151,8 +154,9 @@ The main worker beast for the program.
 >      SDL.setCaption "STRAT" "STRAT"
 >
 >      mainSurf <- SDL.getVideoSurface
->      tileSurfs <- loadArt artFilePaths
->      randomMap <- makeRandomMap mapColumns mapRows
+>      tileSet <- TS.getTileSetFromFile defaultTileSetFP
+>      tileSurfs <- loadArt tileSet
+>      randomMap <- makeRandomMap tileSet mapColumns mapRows
 >
 >      font <- SDLt.openFont gameFontFile 16
 >      uiConsole <- createUIConsole 0 0 consoleWidth consoleHeight font
@@ -161,12 +165,13 @@ The main worker beast for the program.
 >                              uiConsole False defaultKeyHandler
 >      eventLoop initialUI 
 >
->      mapM_ freeSurf tileSurfs
+>      mapM_ freeResSurfs tileSurfs
 >      SDL.enableUnicode False
 >      SDL.quit
 >      putStrLn "done"
 >  where
->      freeSurf (_ , s) = SDL.freeSurface s
+>      freeResSurfs (resInfo, tsurfs) = mapM_ freeSurf tsurfs
+>      freeSurf (_ , surf) = SDL.freeSurface surf
 
 
 > eventLoop :: UIState -> IO ()
@@ -187,6 +192,9 @@ The main worker beast for the program.
 >                      eventLoop ui'
 >	          else eventLoop ui
 >             where	
+>                 resSurfs = currentResolution ui
+>                 tileWidth = TS.riTileWidth $ fst resSurfs
+>                 tileHeight = TS.riTileHeight $ fst resSurfs
 >                 ui' = ui { uiViewPort = updatedVP }
 >                 vp = uiViewPort ui
 >                 updatedVP = vp { SDL.rectX = x', SDL.rectY = y' }
@@ -201,6 +209,22 @@ The main worker beast for the program.
 >                      | x < n = n
 >                      | x > p = p
 >                      | otherwise = x
+>         SDL.MouseButtonDown _ _ SDL.ButtonWheelUp -> do
+>             let oldOrder = uiTerrainSurfaces ui
+>             let oldFirst@(oR, _) = head oldOrder
+>             let newFirst@(nR, _) = last oldOrder
+>             let rotated = [newFirst] ++ (init oldOrder)
+>             if (TS.riTileWidth nR) < (TS.riTileWidth oR)
+>                 then eventLoop $ ui { uiTerrainSurfaces = rotated }
+>                 else eventLoop ui
+>         SDL.MouseButtonDown _ _ SDL.ButtonWheelDown -> do
+>             let oldOrder = uiTerrainSurfaces ui
+>             let oldFirst@(oR, _) = head oldOrder
+>             let newFirst@(nR, _) = head $ tail oldOrder
+>             let rotated = (tail oldOrder) ++ [(head oldOrder)]
+>             if (TS.riTileWidth oR) < (TS.riTileWidth nR)
+>                 then eventLoop $ ui { uiTerrainSurfaces = rotated }
+>                 else eventLoop ui
 >         SDL.MouseButtonDown _ _ b -> do
 >             let mbs = uiMouseButtonsDown ui
 >             eventLoop $ ui { uiMouseButtonsDown = mbs ++ [b] }
@@ -214,6 +238,11 @@ The main worker beast for the program.
 
 > defaultKeyHandler :: UIState ->  SDL.Event -> IO (DM.Maybe UIState)
 > defaultKeyHandler ui (SDL.KeyDown (SDL.Keysym SDL.SDLK_q _ _)) = do
+>     return Nothing
+> defaultKeyHandler ui (SDL.KeyDown (SDL.Keysym SDL.SDLK_w _ _)) = do
+>     f <- readFile "art/Default.tiles"
+>     let tiles = decode f :: Result TileSet
+>     putStrLn $ show tiles
 >     return Nothing
 > defaultKeyHandler ui (SDL.KeyDown (SDL.Keysym SDL.SDLK_BACKQUOTE _ _)) = do
 >     return $ Just $ toggleConsole ui

@@ -3,6 +3,14 @@ Strat version history
 Version 0.0.3 (current)
 =============
 
+BROKE: probably busted cross-platform on relative art paths
+BROKE: many comments are out of sync
+
+TODO: mouse selection highlighting
+
+* Added JSON configurable Tile Sets.
+* Tile Sets have different resolution sets and mouse wheel motion
+  now zooms in and out.
 * Merged UIState and UIConsole into UITypes to avoid cyclic module refs
   that I have no idea how to fix without weird tactics (hs-boot).
   UIConsole contains the functions related to the console.
