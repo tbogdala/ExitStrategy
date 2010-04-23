@@ -14,23 +14,27 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 > import UITypes
 > import UIConsole
 > import TileSet as TS
+> import GameMap
+> import Utils
 
 
 Define constants used for this demo related to art and video.
 
-> windowWidth = 640
-> windowHeight = 480
-> mapRows = 30
-> mapColumns = 30
+> windowWidth = 800
+> windowHeight = 600
+> mapRows = 20
+> mapColumns = 20
 > gameFontFile = "art/fonts/VeraMono.ttf"
 > defaultTileSetFP = "art/Default.tiles"
 > consoleWidth = 640
 > consoleHeight = 200
+> tileSelWindowH = 160
+> tileSelWindowW = 160
 
 
 Generates a variable length list of random TerrainType values.
 
-> getRandomTerrain :: TileSet -> Int -> IO [TerrainType]
+> getRandomTerrain :: TileSet -> Int -> IO [TerrainID]
 > getRandomTerrain ts l = do
 >     randomNumbers <- CM.replicateM l $ R.randomRIO (0,(setLength-1))
 >     return $ map (\i -> TS.mtName $ (TS.tsTiles ts) !! i) randomNumbers
@@ -160,9 +164,12 @@ The main worker beast for the program.
 >
 >      font <- SDLt.openFont gameFontFile 16
 >      uiConsole <- createUIConsole 0 0 consoleWidth consoleHeight font
+>      tileSelectSurf <- createTileSelectSurface tileSelWindowW tileSelWindowH
 >      let initialUI = UIState (SDL.Rect 0 0 windowWidth windowHeight) 
->                              [] mainSurf tileSurfs randomMap (mapColumns, mapRows)
->                              uiConsole False defaultKeyHandler
+>                              [] mainSurf tileSelectSurf tileSurfs randomMap 
+>                              (mapColumns, mapRows)
+>                              uiConsole False (tsDefaultTileName tileSet)
+>                              defaultKeyHandler
 >      eventLoop initialUI 
 >
 >      mapM_ freeResSurfs tileSurfs
@@ -211,7 +218,7 @@ The main worker beast for the program.
 >                      | otherwise = x
 >         SDL.MouseButtonDown _ _ SDL.ButtonWheelUp -> do
 >             let oldOrder = uiTerrainSurfaces ui
->             let oldFirst@(oR, _) = head oldOrder
+>             let (oR, _) = head oldOrder
 >             let newFirst@(nR, _) = last oldOrder
 >             let rotated = [newFirst] ++ (init oldOrder)
 >             if (TS.riTileWidth nR) < (TS.riTileWidth oR)
@@ -219,7 +226,7 @@ The main worker beast for the program.
 >                 else eventLoop ui
 >         SDL.MouseButtonDown _ _ SDL.ButtonWheelDown -> do
 >             let oldOrder = uiTerrainSurfaces ui
->             let oldFirst@(oR, _) = head oldOrder
+>             let (oR, _) = head oldOrder
 >             let newFirst@(nR, _) = head $ tail oldOrder
 >             let rotated = (tail oldOrder) ++ [(head oldOrder)]
 >             if (TS.riTileWidth oR) < (TS.riTileWidth nR)
@@ -236,29 +243,73 @@ The main worker beast for the program.
 
 
 
+
 > defaultKeyHandler :: UIState ->  SDL.Event -> IO (DM.Maybe UIState)
-> defaultKeyHandler ui (SDL.KeyDown (SDL.Keysym SDL.SDLK_q _ _)) = do
->     return Nothing
-> defaultKeyHandler ui (SDL.KeyDown (SDL.Keysym SDL.SDLK_w _ _)) = do
->     f <- readFile "art/Default.tiles"
->     let tiles = decode f :: Result TileSet
->     putStrLn $ show tiles
->     return Nothing
-> defaultKeyHandler ui (SDL.KeyDown (SDL.Keysym SDL.SDLK_BACKQUOTE _ _)) = do
->     return $ Just $ toggleConsole ui
-> defaultKeyHandler ui _ = do return $ Just ui
+> defaultKeyHandler ui (SDL.KeyDown (SDL.Keysym ks _ key)) = do
+>     case ks of
+>       SDL.SDLK_q -> return Nothing
+>       SDL.SDLK_BACKQUOTE -> return $ Just $ toggleConsole ui
+>       SDL.SDLK_RIGHT -> return $ Just $ shiftTileSelectRight ui
+>       SDL.SDLK_LEFT -> return $ Just $ shiftTileSelectLeft ui
+>       _ -> return $ Just ui
+> defaultKeyHandler ui e = do
+>    putStrLn $ "defaultKeyHandler wasn't able to handle the event: " ++ (show e)
+>    return $ Just ui
+
+> shiftTileSelectRight :: UIState -> UIState
+> shiftTileSelectRight ui = ui { uiCurrentTile = newID }
+>   where
+>     currentID = uiCurrentTile ui
+>     (_ , ts) = currentResolution ui
+>     newID = getNextId currentID ts
+>     getNextId c ts = nextLoop c ts ts
+
+>     nextLoop :: TerrainID -> TerrainSurfaces -> TerrainSurfaces -> TerrainID
+>     nextLoop c all [] = getTerrainSurfaceID $ head $ all
+>     nextLoop c all (t : ts) = 
+>         if c == getTerrainSurfaceID t
+>           then 
+>             if ts /= []
+>              then getTerrainSurfaceID $ head $ ts
+>              else getTerrainSurfaceID $ head $ all
+>           else nextLoop c all ts
+
+> shiftTileSelectLeft :: UIState -> UIState
+> shiftTileSelectLeft ui = ui { uiCurrentTile = newID }
+>   where
+>     currentID = uiCurrentTile ui
+>     (_ , ts) = currentResolution ui
+>     newID = getNextId currentID ts
+>     getNextId c ts = nextLoop c ts (head ts) (tail ts)
+
+>     nextLoop c all t [] = getTerrainSurfaceID t
+>     nextLoop c all t (nt : ts) = 
+>         if c == getTerrainSurfaceID nt
+>            then getTerrainSurfaceID t
+>            else nextLoop c all nt ts 
+
+
+
 
 > consoleKeyHandler :: UIState -> SDL.Event -> IO (DM.Maybe UIState)
-> consoleKeyHandler ui (SDL.KeyDown (SDL.Keysym SDL.SDLK_BACKQUOTE _ _)) = do
->     return $ Just $ toggleConsole ui
-> consoleKeyHandler ui (SDL.KeyDown (SDL.Keysym SDL.SDLK_RETURN _ _ )) = do
->     return $ Just $ processCurrentLine ui
-> consoleKeyHandler ui (SDL.KeyDown (SDL.Keysym SDL.SDLK_BACKSPACE _ _)) = do
->     let c' = removeLastChar (uiConsole ui)
->     return $ Just ui { uiConsole = c' }
-> consoleKeyHandler ui (SDL.KeyDown (SDL.Keysym _ _ key)) = do
->     let c' = addCharToConsole (uiConsole ui) key
->     return $ Just ui { uiConsole = c' }
+> consoleKeyHandler ui (SDL.KeyDown (SDL.Keysym ks _ key)) = do
+>     case ks of
+>       SDL.SDLK_BACKQUOTE -> return $ Just $ toggleConsole ui
+>       SDL.SDLK_RETURN -> return $ Just $ processCurrentLine ui
+>       SDL.SDLK_BACKSPACE -> 
+>           let c' = removeLastChar (uiConsole ui)
+>           in return $ Just ui { uiConsole = c' }
+>       _ -> 
+>           let c' = addCharToConsole (uiConsole ui) key
+>           in return $ Just ui { uiConsole = c' }
+> consoleKeyHandler ui e = do
+>    putStrLn $ "consoleKeyHandler wasn't able to handle the event: " ++ (show e)
+>    return $ Just ui
+
+
+
+
+
 
 
 
@@ -278,6 +329,7 @@ This redraws the entire screen. This is done in layers.
 
 > drawUIToScreen :: UIState -> IO Bool
 > drawUIToScreen ui = do
+>     drawSelectedTile ui
 >     if (uiConsoleVisible ui)
 >         then drawConsole (uiMainSurface ui) (uiConsole ui)
 >         else return False
@@ -289,7 +341,37 @@ Draw the tile map onto the screen.
 >     SDL.fillRect (uiMainSurface ui) Nothing (SDL.Pixel 0)
 >     mapM_ (drawTile ui) $ mapCoordinates $ uiTerrainMapSize ui
 
+> getSurfaceWH :: SDL.Surface -> (Int, Int)
+> getSurfaceWH s = 
+>     let w = SDL.surfaceGetWidth s
+>         h = SDL.surfaceGetHeight s
+>     in 
+>         (w , h)
 
+> drawSelectedTile :: UIState -> IO ()
+> drawSelectedTile ui = do
+>     let mainSurf = uiMainSurface ui
+>     let tselSurf = uiSelectedTileSurface ui
+>     let (tselW, tselH) = getSurfaceWH tselSurf
+>     let (mainW, mainH) = getSurfaceWH mainSurf
+>
+>     let (_ , ts) = currentResolution ui
+>     let Just tileSurf = lookup (uiCurrentTile ui) ts
+>     let (tileW, tileH) = getSurfaceWH tileSurf
+>     let clipW = tileW + 10
+>     let clipH = tileH + 10
+
+>     let pf = SDL.surfaceGetPixelFormat tselSurf
+>     white <- SDL.mapRGB pf 255 255 255
+>     SDL.fillRect tselSurf Nothing white
+>     SDL.fillRect tselSurf (Just $ SDL.Rect 5 5 (clipW-10) (clipH-10)) (SDL.Pixel 0)
+>     SDL.blitSurface tileSurf Nothing tselSurf $
+>         Just $ SDL.Rect 5 5 0 0
+>     SDL.blitSurface tselSurf 
+>         (Just $ SDL.Rect 0 0 clipW clipH)
+>         (uiMainSurface ui) 
+>         (Just $ SDL.Rect (mainW - clipW) (mainH - clipH) 0 0)
+>     return ()
 
 
 This function converts between a 'game Point' - which is the coordinate in

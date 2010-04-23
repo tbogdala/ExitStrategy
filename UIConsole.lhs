@@ -10,11 +10,13 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 > import qualified Graphics.UI.SDL.TTF as SDLt
 
 > import UITypes
+> import Utils
 
 > createUIConsole :: Int -> Int -> Int -> Int -> SDLt.Font -> IO UIConsole
 > createUIConsole x y w h f = do
 >     s <- SDL.createRGBSurface [SDL.SrcAlpha] w h 32 0 0 0 0
 >     s' <- SDL.displayFormat s
+>     SDL.freeSurface s
 >     return $ UIConsole (SDL.Rect x y w h) s' f [] ""
 
 > addCharToConsole :: UIConsole -> Char -> UIConsole

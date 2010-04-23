@@ -9,19 +9,7 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 > import qualified Graphics.UI.SDL.TTF as SDLt
 
 > import TileSet
-
-> type TerrainType = String
-> type Point = (Int, Int)
-> type TerrainSurfaces = [(String, SDL.Surface)]
-> type TerrainMap = DMap.Map Point String
-
-This generates a list of map coordinates based off of the
-size passed in (columns, rows).
-
-> mapCoordinates :: (Int , Int) -> [Point]
-> mapCoordinates (c , r) = [(x,y) | x <- [1..c]
-> 	      	   	          , y <- [1..r]]
-
+> import Utils
 
 All of the state related to user interface is kept here
 (including the TerrainMap for now).
@@ -31,16 +19,21 @@ API call not behaving correctly.
 
 uiTerrainSurfaces must be released when exiting game.
 
+The first (ResolutionInfo, TerrainSurface) pair in the array
+is considered the current resolution of art to be used.
+
 > data UIState = UIState 
 >     { 
 >         uiViewPort :: SDL.Rect,
 >	  uiMouseButtonsDown :: [SDL.MouseButton],
 >	  uiMainSurface :: SDL.Surface,
+>         uiSelectedTileSurface :: SDL.Surface,
 > 	  uiTerrainSurfaces :: [(ResolutionInfo, TerrainSurfaces)],
 >	  uiTerrainMap :: TerrainMap,
 >         uiTerrainMapSize :: (Int , Int),
 >         uiConsole :: UIConsole,
 >         uiConsoleVisible :: Bool,
+>         uiCurrentTile :: TerrainID,
 >         uiKeyDownHandler :: (UIState -> SDL.Event -> IO (DM.Maybe UIState))
 >     }
 
@@ -57,4 +50,11 @@ uiTerrainSurfaces must be released when exiting game.
 >         cTextLog :: [String],
 >         cCurrentLine :: String
 >     }
+
+> createTileSelectSurface :: Int -> Int -> IO SDL.Surface
+> createTileSelectSurface w h = do
+>     s <- SDL.createRGBSurface [SDL.SrcAlpha] w h 32 0 0 0 0
+>     s' <- SDL.displayFormat s
+>     SDL.freeSurface s
+>     return s'
 

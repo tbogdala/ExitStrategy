@@ -6,8 +6,12 @@ Version 0.0.3 (current)
 BROKE: probably busted cross-platform on relative art paths
 BROKE: many comments are out of sync
 
-TODO: mouse selection highlighting
+TODO: resizable window
+TODO: tile setting on mouse click
 
+
+* Added a tile selection window to the lower right hand corner
+* Added JSON read/writing for maps (GameMap)
 * Added JSON configurable Tile Sets.
 * Tile Sets have different resolution sets and mouse wheel motion
   now zooms in and out.

@@ -4,10 +4,12 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 > module TileSet where
 
 > import Text.JSON 
-
+> import Utils
 
 > data TileSet = TileSet
 >     {
+>       tsName :: String,
+>       tsDefaultTileName :: String,
 >       tsResolutions :: [ResolutionInfo],
 >       tsTiles :: [MapTile]
 >     } deriving (Eq, Show)
@@ -25,10 +27,6 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 >       mtFileName :: String
 >     } deriving (Eq, Show)
 
-A monadic lookup function ripped from Magnus's post:
-http://therning.org/magnus/archives/719
-
-> lookupM a as = maybe (fail $ "No such element: " ++ a) return (lookup a as)
 
 Loads a tileset from a file.
 
@@ -44,15 +42,19 @@ Loads a tileset from a file.
 
 > instance JSON TileSet where
 >    showJSON ts = makeObj
->        [ ("resolutions", showJSON $ tsResolutions ts)
+>        [ ("name", showJSON $ tsName ts)
+>        , ("defaultTileName", showJSON $ tsDefaultTileName ts)
+>        , ("resolutions", showJSON $ tsResolutions ts)
 >        , ("tiles", showJSON $ tsTiles ts)
 >        ]
 >
 >    readJSON (JSObject obj) = do
 >        let objA = fromJSObject obj
+>        name <- lookupM "name" objA >>= readJSON
+>        defaultTile <- lookupM "defaultTileName" objA >>= readJSON
 >        resDirs <- lookupM "resolutions" objA >>= readJSON
 >        tiles <- lookupM "tiles" objA >>= readJSON
->        return $ TileSet resDirs tiles
+>        return $ TileSet name defaultTile resDirs tiles
 
 > instance JSON ResolutionInfo where
 >    showJSON ri = makeObj
