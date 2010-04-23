@@ -13,12 +13,20 @@ http://www.animal-machine.com/blog/2010/04/getting-started-with-sdl-in-haskell/
 
 Input Commands:
 
-Key  -> Action
-`    -> Opens console
-q    -> Quits program
-
+Key	         -> Action
+================================================================================
+`		 -> Opens console
+q    	      	 -> Quits program
+Left/Right Arrow -> Changes selected tile
+Right-Mouse    	 -> Hold down to pan window around
 
 Console functions:
 
 :mapsize <x> <y>
     (e.g. ":mapsize 10 10" to switch to a 10x10 map)
+
+
+License?
+========
+
+See the included LICENSE file. The game source code and art are licensed under the GPL version 3.

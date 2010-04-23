@@ -27,3 +27,11 @@ size passed in (columns, rows).
 > mapCoordinates :: (Int , Int) -> [Point]
 > mapCoordinates (c , r) = [(x,y) | x <- [1..c]
 > 	      	   	          , y <- [1..r]]
+
+
+> getSurfaceWH :: SDL.Surface -> (Int, Int)
+> getSurfaceWH s = 
+>     let w = SDL.surfaceGetWidth s
+>         h = SDL.surfaceGetHeight s
+>     in 
+>         (w , h)

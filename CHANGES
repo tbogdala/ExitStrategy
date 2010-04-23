@@ -4,13 +4,15 @@ Version 0.0.3 (current)
 =============
 
 BROKE: probably busted cross-platform on relative art paths
-BROKE: many comments are out of sync
+BROKE: many comments are out of sync. need to review all comments in all files.
 
 TODO: resizable window
 TODO: tile setting on mouse click
+TODO: console commands to load and save file
 
 
-* Added a tile selection window to the lower right hand corner
+* Added a tile selection window to the lower right hand corner. The selected
+  tile can be changed with the left and right arrow keys.
 * Added JSON read/writing for maps (GameMap)
 * Added JSON configurable Tile Sets.
 * Tile Sets have different resolution sets and mouse wheel motion

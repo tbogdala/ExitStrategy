@@ -26,7 +26,7 @@ Define constants used for this demo related to art and video.
 > mapColumns = 20
 > gameFontFile = "art/fonts/VeraMono.ttf"
 > defaultTileSetFP = "art/Default.tiles"
-> consoleWidth = 640
+> consoleWidth = 800
 > consoleHeight = 200
 > tileSelWindowH = 160
 > tileSelWindowW = 160
@@ -106,7 +106,7 @@ to be flipped before the effects of this function can be seen.
 
 Takes a viewport and the height and width of the tiles.
 The Point passed in should be view-corrected coordinates.
-Then it checks for collion between te view rectangle of
+Then it checks for collion between the view rectangle of
   (0, 0) - (vpW, vpH) and the tile rectangle of
   (pX, pY) - (pX', pY').
 
@@ -135,7 +135,137 @@ height subtracted from what would otherwise be the y offset.
 >                then baseAdjX + halfW
 >		 else baseAdjX
 >      adjY = baseAdjY - ((y-1) * quarterH)
-      	      	 
+
+
+Algorithm found here: http://www-cs-students.stanford.edu/~amitp/Articles/Hexagon1.html
+   By: Paul J. Gyugyi
+
+FROM THE ARTICLE: 
+
+| Does anyone have an insights and/or algorithms for resolving x,y mouse
+| hits on a hex grid?
+
+Say your grid is enumerated like this:
+    __    __    __
+   /03\__/24\__/45\
+   \__/13\__/34\__/
+   /02\__/23\__/44\
+   \__/12\__/33\__/
+   /01\__/22\__/43\
+   \__/11\__/32\__/
+   /00\__/21\__/42\
+   \__/  \__/  \__/
+
+and say that the origin is the bottom left corner of the 00 hexagon.
+I'll use Warwick Allison's parameters also:
+
+        (mx,my) = mouse coordinate
+        h = height of hexagon
+        tw = width of hexagon horizontal side
+        cw = width of side triangle
+ 
+ -- = cw
+   ____
+  /    \    |
+ /      \   | = h
+ \      /   |
+  \____/    |
+ 
+   ---- = tw
+
+Then we can divide the region into cw+tw x h sized rectangles in a
+sideways brick-layer's pattern so that the rectangles are almost in the
+same place as the hexagons:
+
+   _______     ______
+  /|   \ |    /|   \ |
+ / |01  \|_____|22  \|
+ \ |    /|   \ |    /|
+  \|___/_|11  \|___/_|
+  /|   \ |    /|   \ |
+ / |00  \|___/_|21  \|
+ \ |    /|   \ |    /|
+  \|___/_|    \|___/_|
+
+The idea is to assume first that if the mouse landed in rectangle ij
+then it landed in hexagon ij and then correct if the mouse position is
+in one of the two triangular flaps.  I'll compute two numbers tx and ty
+which index the hexagon that the user clicked in.  All my arithmetic is
+in integers and I assume that division is never rounded up, and,
+compatibly, remainders are always non-negative.  I also assume h, the
+height of a hexagon, is even.  Here's the code:
+
+tx = mx/(cw+tw); rx = mx%(cw+tw);
+my += tx*h/2;
+ty = my/h; ry = my%h;
+rx = tw+cw-rx;
+ry -= h/2;
+if(2*cw*ry > rx*h) {tx++; ty++;}
+if(2*cw*ry < -rx*h) tx++;
+
+END OF ARTICLE
+
+Algo had to be adjusted 90 degrees because I drew my maps differently.
+
+-- mouse coordinates (mx, my)
+-- tileH and tileW are picked from the tile set
+
+Translation that's adjusted for the way I draw the hex map.
+
+ calcCoordinate tileW tileH (mx, my) = (tx', ty')
+     where
+         th = round $ toRational tileH / 2
+         ch = round $ toRational tileH / 4
+         ty = round $ (toRational my) / (toRational (ch+th))
+         ry = my `mod` (ch+th)
+         mx' = mx + (round $ toRational (ty * tileW) / 2)
+         tx = round $ toRational mx' / toRational tileW
+         rx = mx' `mod` tileW
+         ry' = th + ch - ry
+         rx' = rx - (round $ toRational tileW / 2)
+
+         (mtx, mty) = if 2 * ch * rx > ry * tileW  
+                      then (tx, ty+1) 
+                      else (tx+1, ty)
+         (tx', ty') = if 2 * ch * rx < -(ry * tileW) 
+                      then (tx, ty+1) 
+                      else (tx, ty)
+
+Still has an error where it doesn't adjust for my (tileW/2) offset of X
+
+> calcCoordinate :: Int -> Int -> Point -> Point
+> calcCoordinate tileW tileH (mx, my) = (tx', ty')
+>     where
+>         th = round $ toRational tileH / 2                   -- height of flat portion of hex side
+>         ch = round $ toRational tileH / 4                   -- height of diagonal portion
+>         ty = round $ (toRational my) / (toRational (ch+th)) -- Y for 'shifted box coord' 
+>         ry = my `mod` (ch+th)                               -- remainder of ty
+>         mx' = mx + (round $ toRational (ty * tileW) / 2)    --  
+>         tx = round $ toRational mx' / toRational tileW
+>         rx = mx' `mod` tileW
+>         ry' = th + ch - ry
+>         rx' = rx - (round $ toRational tileW / 2)
+
+>         (mtx, mty) = if 2 * ch * rx > ry * tileW  
+>                      then (tx, ty+1) 
+>                      else (tx+1, ty)
+>         (tx', ty') = if 2 * ch * rx < -(ry * tileW) 
+>                      then (tx, ty+1) 
+>                      else (tx, ty)
+
+
+> getMapCoordinate :: Int -> Int -> (Int,Int) -> Point -> DM.Maybe Point
+> getMapCoordinate tileW tileH (maxCol,maxRow) (x,y) = 
+>   let quarterH = tileH `div` 4
+>       halfW = tileW `div` 2
+>       maxX = (maxCol * tileW) + halfW
+>       maxY = (maxRow * tileH) - ((maxRow-1) * quarterH)
+>   in if x < 0 || y < 0
+>         then Nothing
+>         else if x > maxX || y > maxY
+>             then Nothing
+>             else Just $ calcCoordinate tileW tileH (x,y)
+
 
 The main worker beast for the program. 
 
@@ -166,8 +296,8 @@ The main worker beast for the program.
 >      uiConsole <- createUIConsole 0 0 consoleWidth consoleHeight font
 >      tileSelectSurf <- createTileSelectSurface tileSelWindowW tileSelWindowH
 >      let initialUI = UIState (SDL.Rect 0 0 windowWidth windowHeight) 
->                              [] mainSurf tileSelectSurf tileSurfs randomMap 
->                              (mapColumns, mapRows)
+>                              [] mainSurf tileSelectSurf tileSet tileSurfs 
+>                              randomMap (mapColumns, mapRows)
 >                              uiConsole False (tsDefaultTileName tileSet)
 >                              defaultKeyHandler
 >      eventLoop initialUI 
@@ -193,29 +323,16 @@ The main worker beast for the program.
 >             case jui of
 >                 DM.Nothing -> return ()
 >                 DM.Just ui' -> eventLoop ui'
->         SDL.MouseMotion _ _ xr yr -> do
+>         SDL.MouseMotion x y xr yr -> do
 >             if elem SDL.ButtonRight $ uiMouseButtonsDown ui
->                 then do
->                      eventLoop ui'
->	          else eventLoop ui
->             where	
->                 resSurfs = currentResolution ui
->                 tileWidth = TS.riTileWidth $ fst resSurfs
->                 tileHeight = TS.riTileHeight $ fst resSurfs
->                 ui' = ui { uiViewPort = updatedVP }
->                 vp = uiViewPort ui
->                 updatedVP = vp { SDL.rectX = x', SDL.rectY = y' }
->                 x' = fix tolXNeg tolXPos $ (SDL.rectX vp) - fromIntegral xr
->                 y' = fix tolYNeg tolYPos $ (SDL.rectY vp) - fromIntegral yr
->                 (tW, tH) = (uiTerrainMapSize ui)
->                 tolXNeg = 0 - (round $ 0.8 * toRational windowWidth)
->                 tolXPos = (tW - 1) * tileWidth 
->                 tolYNeg = 0 - (round $ 0.8 * toRational windowHeight)
->                 tolYPos = (tH - 1) * ( round $ 0.75 *  toRational tileHeight)
->                 fix n p x
->                      | x < n = n
->                      | x > p = p
->                      | otherwise = x
+>                 then eventLoop $ rightMouseBMHandler ui 
+>                                      (fromIntegral xr) 
+>                                      (fromIntegral yr)
+>                 else if elem SDL.ButtonLeft $ uiMouseButtonsDown ui
+>                      then do leftMouseBMHandler
+>                                 ui (fromIntegral x) (fromIntegral y)
+>                                 (fromIntegral xr) (fromIntegral yr) >>= eventLoop
+>                      else eventLoop ui
 >         SDL.MouseButtonDown _ _ SDL.ButtonWheelUp -> do
 >             let oldOrder = uiTerrainSurfaces ui
 >             let (oR, _) = head oldOrder
@@ -234,14 +351,48 @@ The main worker beast for the program.
 >                 else eventLoop ui
 >         SDL.MouseButtonDown _ _ b -> do
 >             let mbs = uiMouseButtonsDown ui
->             eventLoop $ ui { uiMouseButtonsDown = mbs ++ [b] }
+>             eventLoop $  ui { uiMouseButtonsDown = mbs ++ [b] }
 >         SDL.MouseButtonUp _ _ b -> do
 >             let mbs = uiMouseButtonsDown ui
 >	      let mbs' = filter (\i -> if i == b then False else True) mbs
 >             eventLoop $ ui { uiMouseButtonsDown = mbs' }
 >         _ -> do eventLoop ui
 
+> leftMouseBMHandler :: UIState ->  Int -> Int -> Int -> Int -> IO UIState
+> leftMouseBMHandler ui x y xr yr = do
+>         let (gx, gy) = viewPoint2Game (x,y) $ uiViewPort ui
+>         putStrLn $ (show x) ++ " " ++ (show y) ++ "  " ++ (show gx) ++ " " ++ (show gy)
+>         let resSurfs = currentResolution ui
+>         let tileWidth = TS.riTileWidth $ fst resSurfs
+>         let tileHeight = TS.riTileHeight $ fst resSurfs
+>         let c = getMapCoordinate tileWidth tileHeight (uiTerrainMapSize ui) (gx,gy)
+>         putStrLn $ show c
+>         return $ ui { uiTerrainMap = updatedMap }
+>     where
+>         updatedMap = uiTerrainMap ui
 
+
+
+
+> rightMouseBMHandler :: UIState -> Int -> Int -> UIState
+> rightMouseBMHandler ui xr yr =  ui { uiViewPort = updatedVP }
+>     where	
+>         resSurfs = currentResolution ui
+>         tileWidth = TS.riTileWidth $ fst resSurfs
+>         tileHeight = TS.riTileHeight $ fst resSurfs
+>         vp = uiViewPort ui
+>         updatedVP = vp { SDL.rectX = x', SDL.rectY = y' }
+>         x' = fix tolXNeg tolXPos $ (SDL.rectX vp) - fromIntegral xr
+>         y' = fix tolYNeg tolYPos $ (SDL.rectY vp) - fromIntegral yr
+>         (tW, tH) = (uiTerrainMapSize ui)
+>         tolXNeg = 0 - (round $ 0.8 * toRational windowWidth)
+>         tolXPos = (tW - 1) * tileWidth 
+>         tolYNeg = 0 - (round $ 0.8 * toRational windowHeight)
+>         tolYPos = (tH - 1) * ( round $ 0.75 *  toRational tileHeight)
+>         fix n p x
+>              | x < n = n
+>              | x > p = p
+>              | otherwise = x
 
 
 > defaultKeyHandler :: UIState ->  SDL.Event -> IO (DM.Maybe UIState)
@@ -341,12 +492,6 @@ Draw the tile map onto the screen.
 >     SDL.fillRect (uiMainSurface ui) Nothing (SDL.Pixel 0)
 >     mapM_ (drawTile ui) $ mapCoordinates $ uiTerrainMapSize ui
 
-> getSurfaceWH :: SDL.Surface -> (Int, Int)
-> getSurfaceWH s = 
->     let w = SDL.surfaceGetWidth s
->         h = SDL.surfaceGetHeight s
->     in 
->         (w , h)
 
 > drawSelectedTile :: UIState -> IO ()
 > drawSelectedTile ui = do
@@ -374,7 +519,7 @@ Draw the tile map onto the screen.
 >     return ()
 
 
-This function converts between a 'game Point' - which is the coordinate in
+This function converts between a 'game Point' - which is the coordinate relative to
 the game map - to a 'view Point' which is translocated to be relative to the
 viewport.
 
@@ -382,3 +527,9 @@ viewport.
 > gamePoint2View (SDL.Rect vpx vpy _ _) (gx , gy) = 
 >     ((gx - vpx) , (gy - vpy))
 		
+This function converts between a 'view Point' - which is a coordinate relative to
+the viewport - t a 'game point' which is a coordinate relative to the game map.
+
+> viewPoint2Game :: Point -> SDL.Rect -> Point
+> viewPoint2Game (x,y) (SDL.Rect vpx vpy _ _) =
+>     ((vpx + x) , (vpy + y))

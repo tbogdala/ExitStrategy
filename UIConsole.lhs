@@ -11,6 +11,7 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 
 > import UITypes
 > import Utils
+> import TileSet
 
 > createUIConsole :: Int -> Int -> Int -> Int -> SDLt.Font -> IO UIConsole
 > createUIConsole x y w h f = do
@@ -81,7 +82,6 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 >             return $ Just t
 
 
-FIXME: Hardcoded to default to "water"
 
 > runCommand :: [String] -> UIState -> UIState
 > runCommand (":test" : args) ui = ui { uiConsole = newConsole }
@@ -98,7 +98,7 @@ FIXME: Hardcoded to default to "water"
 >         newMap = DMap.union cutdownMap defaultMap
 >         defaultMap = foldr makeDefault DMap.empty (mapCoordinates (w,h))
 >         makeDefault coord m =
->               DMap.insert coord "water" m
+>               DMap.insert coord (tsDefaultTileName $ uiTileSet ui) m
 
 The default implementation does nothing.
  
