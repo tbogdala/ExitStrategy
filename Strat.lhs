@@ -137,121 +137,64 @@ height subtracted from what would otherwise be the y offset.
 >      adjY = baseAdjY - ((y-1) * quarterH)
 
 
-Algorithm found here: http://www-cs-students.stanford.edu/~amitp/Articles/Hexagon1.html
-   By: Paul J. Gyugyi
+calcCoordinate returns a 1-based index as a Point that represents the map tile coordinate that the 
+(mx, my) intersects with.
 
-FROM THE ARTICLE: 
+Any reference to even or odd below refer to a 0-based index value as the result is only 
+adjuseted to a 1-based index at the very end.
 
-| Does anyone have an insights and/or algorithms for resolving x,y mouse
-| hits on a hex grid?
+This algoritm accounts for the tileW/2 offset of even rows. This is handled as
+a straight lateral shift of X by tileW/2. Easy.
 
-Say your grid is enumerated like this:
-    __    __    __
-   /03\__/24\__/45\
-   \__/13\__/34\__/
-   /02\__/23\__/44\
-   \__/12\__/33\__/
-   /01\__/22\__/43\
-   \__/11\__/32\__/
-   /00\__/21\__/42\
-   \__/  \__/  \__/
+The hex tile is divided up into thee sections, shown below (not to scale). The size of
+each section is tileH/4 ... division 1 is considered to overlap with the last
+quarter of the tile.
+               _______
+         .        1   |
+       .   .   _______|   
+     |       |  2 & 3 |
+     |       | _______|
+       .   .         
+         v     
 
-and say that the origin is the bottom left corner of the 00 hexagon.
-I'll use Warwick Allison's parameters also:
+For divisons 2 and 3, the offset is calculated easily.
 
-        (mx,my) = mouse coordinate
-        h = height of hexagon
-        tw = width of hexagon horizontal side
-        cw = width of side triangle
- 
- -- = cw
-   ____
-  /    \    |
- /      \   | = h
- \      /   |
-  \____/    |
- 
-   ---- = tw
+For division 1, the slope of the line is calculated for the left and right
+side of the tile. The right slope is chosen, then the y position of the 
+line itself is calculated = slope * x - yoffset.  [yoffset is either (-tileH / 4)
+or 0 depending on left or right side, respectively.] Once the Y coordinate of the
+line is known, it is compared to the y offset of the point passed into the function.
 
-Then we can divide the region into cw+tw x h sized rectangles in a
-sideways brick-layer's pattern so that the rectangles are almost in the
-same place as the hexagons:
+If the point's y offset is below the line, then we know the map coordinate. If
+it's above the line, then the coordinate is adjusted to use the row above. This
+also accounts for the shift between even and odd rows.
 
-   _______     ______
-  /|   \ |    /|   \ |
- / |01  \|_____|22  \|
- \ |    /|   \ |    /|
-  \|___/_|11  \|___/_|
-  /|   \ |    /|   \ |
- / |00  \|___/_|21  \|
- \ |    /|   \ |    /|
-  \|___/_|    \|___/_|
-
-The idea is to assume first that if the mouse landed in rectangle ij
-then it landed in hexagon ij and then correct if the mouse position is
-in one of the two triangular flaps.  I'll compute two numbers tx and ty
-which index the hexagon that the user clicked in.  All my arithmetic is
-in integers and I assume that division is never rounded up, and,
-compatibly, remainders are always non-negative.  I also assume h, the
-height of a hexagon, is even.  Here's the code:
-
-tx = mx/(cw+tw); rx = mx%(cw+tw);
-my += tx*h/2;
-ty = my/h; ry = my%h;
-rx = tw+cw-rx;
-ry -= h/2;
-if(2*cw*ry > rx*h) {tx++; ty++;}
-if(2*cw*ry < -rx*h) tx++;
-
-END OF ARTICLE
-
-Algo had to be adjusted 90 degrees because I drew my maps differently.
-
--- mouse coordinates (mx, my)
--- tileH and tileW are picked from the tile set
-
-Translation that's adjusted for the way I draw the hex map.
-
- calcCoordinate tileW tileH (mx, my) = (tx', ty')
-     where
-         th = round $ toRational tileH / 2
-         ch = round $ toRational tileH / 4
-         ty = round $ (toRational my) / (toRational (ch+th))
-         ry = my `mod` (ch+th)
-         mx' = mx + (round $ toRational (ty * tileW) / 2)
-         tx = round $ toRational mx' / toRational tileW
-         rx = mx' `mod` tileW
-         ry' = th + ch - ry
-         rx' = rx - (round $ toRational tileW / 2)
-
-         (mtx, mty) = if 2 * ch * rx > ry * tileW  
-                      then (tx, ty+1) 
-                      else (tx+1, ty)
-         (tx', ty') = if 2 * ch * rx < -(ry * tileW) 
-                      then (tx, ty+1) 
-                      else (tx, ty)
-
-Still has an error where it doesn't adjust for my (tileW/2) offset of X
+Whew.
 
 > calcCoordinate :: Int -> Int -> Point -> Point
-> calcCoordinate tileW tileH (mx, my) = (tx', ty')
+> calcCoordinate tileW tileH (mx, my) = (ugX + diffX + 1, ugY + diffY + 1)
 >     where
->         th = round $ toRational tileH / 2                   -- height of flat portion of hex side
->         ch = round $ toRational tileH / 4                   -- height of diagonal portion
->         ty = round $ (toRational my) / (toRational (ch+th)) -- Y for 'shifted box coord' 
->         ry = my `mod` (ch+th)                               -- remainder of ty
->         mx' = mx + (round $ toRational (ty * tileW) / 2)    --  
->         tx = round $ toRational mx' / toRational tileW
->         rx = mx' `mod` tileW
->         ry' = th + ch - ry
->         rx' = rx - (round $ toRational tileW / 2)
+>         halfW =  quot tileW  2 
+>         scaleH = toRational (tileH * 3) /  4
+>         ugY = floor $ toRational my / scaleH
+>         offX = if even ugY 
+>                 then halfW 
+>                 else 0
+>         modMx = mx - offX
+>         ugX = quot modMx tileW
+>         remY = my - (floor (toRational ugY * scaleH))
+>         remX = modMx - (ugX * tileW)
 
->         (mtx, mty) = if 2 * ch * rx > ry * tileW  
->                      then (tx, ty+1) 
->                      else (tx+1, ty)
->         (tx', ty') = if 2 * ch * rx < -(ry * tileW) 
->                      then (tx, ty+1) 
->                      else (tx, ty)
+>         slopeLeft =  (toRational tileH / 4) / toRational halfW
+>         slopeRight = -slopeLeft
+>         isLeftHalf = remX < halfW
+>         magicY = if isLeftHalf
+>                   then abs $ (floor (slopeLeft * realToFrac remX)) - (quot tileH  4)
+>                   else abs $ (floor (slopeRight * realToFrac (remX - halfW)))
+>         oddOff = if even ugY then 1 else 0
+>         (diffX, diffY) = if (remY > (quot tileH  4)) || (magicY < remY )
+>                          then (0,0) 
+>                          else if isLeftHalf then (-1 + oddOff, -1) else (0 + oddOff, -1)
 
 
 > getMapCoordinate :: Int -> Int -> (Int,Int) -> Point -> DM.Maybe Point
@@ -260,11 +203,14 @@ Still has an error where it doesn't adjust for my (tileW/2) offset of X
 >       halfW = tileW `div` 2
 >       maxX = (maxCol * tileW) + halfW
 >       maxY = (maxRow * tileH) - ((maxRow-1) * quarterH)
+>       checkPoint p@(px, py) = if px > 0 && px <= maxCol && py > 0 && py <= maxRow 
+>                               then Just p
+>                               else Nothing
 >   in if x < 0 || y < 0
 >         then Nothing
 >         else if x > maxX || y > maxY
 >             then Nothing
->             else Just $ calcCoordinate tileW tileH (x,y)
+>             else checkPoint $ calcCoordinate tileW tileH (x,y)
 
 
 The main worker beast for the program. 
@@ -329,9 +275,9 @@ The main worker beast for the program.
 >                                      (fromIntegral xr) 
 >                                      (fromIntegral yr)
 >                 else if elem SDL.ButtonLeft $ uiMouseButtonsDown ui
->                      then do leftMouseBMHandler
->                                 ui (fromIntegral x) (fromIntegral y)
->                                 (fromIntegral xr) (fromIntegral yr) >>= eventLoop
+>                      then eventLoop $ leftMouseBMHandler
+>                                           ui (fromIntegral x) (fromIntegral y)
+>                                           (fromIntegral xr) (fromIntegral yr)
 >                      else eventLoop ui
 >         SDL.MouseButtonDown _ _ SDL.ButtonWheelUp -> do
 >             let oldOrder = uiTerrainSurfaces ui
@@ -349,29 +295,34 @@ The main worker beast for the program.
 >             if (TS.riTileWidth oR) < (TS.riTileWidth nR)
 >                 then eventLoop $ ui { uiTerrainSurfaces = rotated }
 >                 else eventLoop ui
->         SDL.MouseButtonDown _ _ b -> do
+>         SDL.MouseButtonDown x y b -> do
 >             let mbs = uiMouseButtonsDown ui
->             eventLoop $  ui { uiMouseButtonsDown = mbs ++ [b] }
+>             let updUI = ui { uiMouseButtonsDown = mbs ++ [b] }
+>             if b == SDL.ButtonLeft
+>                then eventLoop $ changeTile (fromIntegral x) (fromIntegral y) updUI
+>                else eventLoop updUI
 >         SDL.MouseButtonUp _ _ b -> do
 >             let mbs = uiMouseButtonsDown ui
 >	      let mbs' = filter (\i -> if i == b then False else True) mbs
 >             eventLoop $ ui { uiMouseButtonsDown = mbs' }
 >         _ -> do eventLoop ui
 
-> leftMouseBMHandler :: UIState ->  Int -> Int -> Int -> Int -> IO UIState
-> leftMouseBMHandler ui x y xr yr = do
+> changeTile :: Int -> Int -> UIState -> UIState
+> changeTile x y ui= 
 >         let (gx, gy) = viewPoint2Game (x,y) $ uiViewPort ui
->         putStrLn $ (show x) ++ " " ++ (show y) ++ "  " ++ (show gx) ++ " " ++ (show gy)
->         let resSurfs = currentResolution ui
->         let tileWidth = TS.riTileWidth $ fst resSurfs
->         let tileHeight = TS.riTileHeight $ fst resSurfs
->         let c = getMapCoordinate tileWidth tileHeight (uiTerrainMapSize ui) (gx,gy)
->         putStrLn $ show c
->         return $ ui { uiTerrainMap = updatedMap }
->     where
->         updatedMap = uiTerrainMap ui
+>             resSurfs = currentResolution ui
+>             tileWidth = TS.riTileWidth $ fst resSurfs
+>             tileHeight = TS.riTileHeight $ fst resSurfs
+>             c = getMapCoordinate tileWidth tileHeight (uiTerrainMapSize ui) (gx,gy)
+>             newID = uiCurrentTile ui
+>             updatedMap coord = DMap.insert coord newID $ uiTerrainMap ui
+>         in case c of
+>             Just coord -> ui { uiTerrainMap =  updatedMap coord}
+>             Nothing -> ui
 
 
+> leftMouseBMHandler :: UIState ->  Int -> Int -> Int -> Int ->  UIState
+> leftMouseBMHandler ui x y xr yr = changeTile x y ui
 
 
 > rightMouseBMHandler :: UIState -> Int -> Int -> UIState

@@ -7,10 +7,10 @@ BROKE: probably busted cross-platform on relative art paths
 BROKE: many comments are out of sync. need to review all comments in all files.
 
 TODO: resizable window
-TODO: tile setting on mouse click
 TODO: console commands to load and save file
 
-
+* Clicking the left mouse button sets the tile at the location to the 
+  tile shown in the selection box at the lower right column.
 * Added a tile selection window to the lower right hand corner. The selected
   tile can be changed with the left and right arrow keys.
 * Added JSON read/writing for maps (GameMap)
