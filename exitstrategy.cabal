@@ -20,5 +20,5 @@ Executable exitstrategy-editor
   Main-is:           Editor.lhs
   Other-modules:     UITypes, UIConsole, TileSet, GameMap, Utils
   Build-Depends:     base >= 4, containers, random, SDL, SDL-image, SDL-ttf,
-                     json, pathtype
+                     json, directory, filepath
 

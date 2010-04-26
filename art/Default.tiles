@@ -1,4 +1,5 @@
 {
+  "version": 0,
   "name": "default",
   "defaultTileName": "water",
   "resolutions": 

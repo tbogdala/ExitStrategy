@@ -9,6 +9,11 @@ This module houses functions related to TileSet objects.
 > import Utils
 
 
+Define the current version of the TileSet file format.
+
+> currentTileSetFileVersion = 0
+
+
 Defines a TileSet. This is meant to be a way the user can customize
 the look of the game with new graphics. 
 
@@ -20,6 +25,7 @@ of 18 surfaces will be loaded.
 
 > data TileSet = TileSet
 >     {
+>       tsFileVersion :: Int,
 >       tsName :: String,
 >       tsDefaultTileName :: String,
 >       tsResolutions :: [ResolutionInfo],
@@ -76,7 +82,8 @@ data types. See the GameMap.lhs file for further commentary on this.
 
 > instance JSON TileSet where
 >    showJSON ts = makeObj
->        [ ("name", showJSON $ tsName ts)
+>        [ ("version", showJSON $ tsFileVersion ts)
+>        , ("name", showJSON $ tsName ts)
 >        , ("defaultTileName", showJSON $ tsDefaultTileName ts)
 >        , ("resolutions", showJSON $ tsResolutions ts)
 >        , ("tiles", showJSON $ tsTiles ts)
@@ -84,11 +91,12 @@ data types. See the GameMap.lhs file for further commentary on this.
 >
 >    readJSON (JSObject obj) = do
 >        let objA = fromJSObject obj
+>        v <- lookupM "version" objA >>= readJSON
 >        name <- lookupM "name" objA >>= readJSON
 >        defaultTile <- lookupM "defaultTileName" objA >>= readJSON
 >        resDirs <- lookupM "resolutions" objA >>= readJSON
 >        tiles <- lookupM "tiles" objA >>= readJSON
->        return $ TileSet name defaultTile resDirs tiles
+>        return $ TileSet v name defaultTile resDirs tiles
 
 > instance JSON ResolutionInfo where
 >    showJSON ri = makeObj

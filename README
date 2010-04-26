@@ -41,7 +41,8 @@ Console functions:
 :savemap <fn>
     saves a map to the 'maps' sub-directory with the name <fn>.map.
     automatically uses the application data directory -- on UNIX
-    this should be $HOME/.ExitStrategy.
+    this should be $HOME/.ExitStrategy. On Windows, it will be
+    something like this: C:\Users\<username>\AppData\Roaming\ExitStrategy
     (e.g. ":savemap test" saves to $HOME/.ExitStrategy/maps/test.map)
 
 :loadmap <fn>

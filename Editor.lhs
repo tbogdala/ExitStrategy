@@ -5,7 +5,7 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 
 This is the main file for the map editor executable.
 
-> import System.Path
+> import System.FilePath as FP
 > import qualified Data.Maybe as DM
 > import qualified Data.Map as DMap
 > import qualified Control.Monad as CM
@@ -29,11 +29,8 @@ Define defaults used for this demo related to art and video.
 > mapRows = 20
 > mapColumns = 20
 
-> gameFontFile :: RelFile
-> gameFontFile = asRelDir "art" </> asRelDir "fonts" </> asRelFile "VeraMono.ttf"
-
-> defaultTileSetFP :: RelFile
-> defaultTileSetFP = asRelDir "art" </> asRelFile "Default.tiles"
+> gameFontFile = FP.joinPath ["art", "fonts", "VeraMono.ttf"]
+> defaultTileSetFP = FP.combine "art" "Default.tiles"
 
 Hardcoded constraints for the tile selection window surface. 
 This should be bigger than the largest tile reference in the TileSet.
@@ -60,9 +57,9 @@ The loadFile function will load a given file (mt) in a given directory
 >         tsurfs <- mapM (loadFile resInfo) tiles
 >         return (resInfo, tsurfs)
 >     loadFile resInfo mt = do
->         let resdir = joinPath (TS.riDirPath resInfo) :: RelDir
->             fp = resdir </> asRelFile (TS.mtFileName mt)
->         s  <- SDLi.load $ getPathString fp
+>         let resdir = FP.joinPath (TS.riDirPath resInfo)
+>             fp = FP.combine resdir (TS.mtFileName mt)
+>         s  <- SDLi.load fp
 >         s' <- SDL.displayFormatAlpha s
 >         SDL.freeSurface s
 >         return ((TS.mtName mt), s')
@@ -277,11 +274,11 @@ The main worker beast for the program.
 >      SDL.setCaption (appName ++ "- Editor") (appName ++ "-Editor")
 >
 >      mainSurf <- SDL.getVideoSurface
->      tileSet <- TS.getTileSetFromFile $ getPathString defaultTileSetFP
+>      tileSet <- TS.getTileSetFromFile defaultTileSetFP
 >      tileSurfs <- loadArt tileSet
 >      randomMap <- makeRandomMap tileSet mapColumns mapRows
 >
->      font <- SDLt.openFont (getPathString gameFontFile) 16
+>      font <- SDLt.openFont gameFontFile 16
 >      uiConsole <- createUIConsole 0 0 defaultWindowWidth font
 >      tileSelectSurf <- createTileSelectSurface tileSelWindowW tileSelWindowH
 >      let initialUI = UIState (SDL.Rect 0 0 defaultWindowWidth defaultWindowHeight) 

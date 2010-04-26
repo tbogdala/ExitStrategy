@@ -1,12 +1,16 @@
 Exit Strategy version history
 
+
 Version 0.0.3
 =============
 
 * Project now has an actual name.
-* Now using System.Path from pathtype for cross-platform system paths.
-  Maps will be saved in your user app directory by default -- on UNIX
-  systems this will be $HOME/.ExitStrategy/maps.
+* Changed back to System.Directory. pathtype is broken in Windows.* 
+  Now using System.FilePath/System.Directory cross-platform system paths.
+* Maps will be saved in your user app directory by default -- on UNIX
+  systems this will be $HOME/.ExitStrategy/maps. On Windows, something like:
+  C:\Users\<username>\AppData\Roaming\ExitStrategy
+* Added version numbers to the JSON files.
 * UIConsole now resizes with video resolution.
 * Added ability to resize window to change video resolution.
 * Clicking the left mouse button sets the tile at the location to the 

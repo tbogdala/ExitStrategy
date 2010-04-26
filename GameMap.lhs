@@ -8,8 +8,8 @@ JSON is used to save and load the map.
 System.Path functions should be used for all file path manipulations.
 
 > import Text.JSON 
-> import System.Path
-> import System.Path.Directory
+> import System.FilePath as FP
+> import System.Directory as Dir
 > import qualified Data.Map as DMap
 > import qualified System.Random as R
 > import qualified Control.Monad as CM
@@ -18,10 +18,15 @@ System.Path functions should be used for all file path manipulations.
 > import TileSet as TS
 
 
+Define the current version number for the file.
+
+> currentGameMapFileVersion = 0
+
 The main game map object.
 
 > data GameMap = GameMap
 >     {
+>          gmFileVersion :: Int,
 >          gmHeight :: Int,
 >          gmWidth :: Int,
 >          gmTileSetName :: String,
@@ -47,7 +52,8 @@ Nothing fancy is done here; straight boilerplate.
 
 > instance JSON GameMap where
 >     showJSON gm = makeObj
->         [ ("height", showJSON $ gmHeight gm)
+>         [ ("version", showJSON $ gmFileVersion gm)
+>         , ("height", showJSON $ gmHeight gm)
 >         , ("width", showJSON $ gmWidth gm) 
 >         , ("tileSetName", showJSON $ gmTileSetName gm)
 >         , ("locations", showJSON $ gmLocations gm)
@@ -55,11 +61,12 @@ Nothing fancy is done here; straight boilerplate.
 >
 >     readJSON (JSObject obj) = do
 >         let objA = fromJSObject obj
+>         v <- lookupM "version" objA >>= readJSON
 >         h <- lookupM "height" objA >>= readJSON
 >         w <- lookupM "width" objA >>= readJSON
 >         tsn <- lookupM "tileSetName" objA >>= readJSON
 >         locs <- lookupM "locations" objA >>= readJSON
->         return $ GameMap h w tsn locs
+>         return $ GameMap v h w tsn locs
 
 > instance JSON GameMapLoc where
 >     showJSON gml = makeObj
@@ -95,7 +102,7 @@ fold them up into an IO result instead of an array of IO actions.
 > makeRandomMap :: TileSet -> Int -> Int -> IO (GameMap)
 > makeRandomMap ts w h = do
 >     map <- CM.foldM (\m y -> makeRow w y m) DMap.empty [1..h]
->     return $ GameMap h w (tsName ts) map
+>     return $ GameMap currentGameMapFileVersion h w (tsName ts) map
 >   where
 >     makeRow w y tileMap = do
 >         rt <- getRandomTerrain ts w
@@ -115,11 +122,11 @@ If this directory does not exist it will be created.
 
 > writeMapToFile :: String -> GameMap -> IO ()
 > writeMapToFile fn gm = do
->     audDir <- getAppUserDataDirectory appName
->     let dirp = audDir </> asDirPath "maps" 
->     let fp = dirp </> asRelFile fn <.> "map"
+>     audDir <- Dir.getAppUserDataDirectory appName
+>     let dirp = FP.combine audDir "maps"
+>     let fp = FP.combine dirp $ FP.replaceExtension fn "map"
 >     createDirectoryIfMissing True dirp
->     writeFile (getPathString fp) $ encode gm
+>     writeFile fp $ encode gm
 >     return ()
 
 
@@ -135,13 +142,13 @@ If the file does not exist, Nothing is returned.
 
 > readMapFromFile :: String -> IO (Maybe GameMap)
 > readMapFromFile fn = do
->     audDir <- getAppUserDataDirectory appName
->     let dirp = audDir </> asDirPath "maps" 
->     let fp = dirp </> asRelFile fn <.> "map"
+>     audDir <- Dir.getAppUserDataDirectory appName
+>     let dirp = FP.combine audDir  "maps" 
+>     let fp = FP.combine dirp $ FP.replaceExtension fn "map"
 >     exists <- doesFileExist fp 
 >     if exists
 >         then do
->             f <- readFile (getPathString fp)
+>             f <- readFile fp
 >             let json = decode f :: Result GameMap
 >             case json of
 >                 Ok gm -> return $ Just gm
