@@ -3,6 +3,10 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 
 > module UITypes where
 
+All of the data types related to user interface is kept here 
+(including the TerrainMap for now) to avoid cyclic imports.
+
+
 > import qualified Data.Maybe as DM
 > import qualified Data.Map as DMap
 > import qualified Graphics.UI.SDL as SDL
@@ -10,9 +14,8 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 
 > import TileSet
 > import Utils
+> import GameMap
 
-All of the state related to user interface is kept here
-(including the TerrainMap for now).
 
 uiMouseButtonsDown is tracked due to the SDL.getMouseState
 API call not behaving correctly.
@@ -30,8 +33,7 @@ is considered the current resolution of art to be used.
 >         uiSelectedTileSurface :: SDL.Surface,
 >         uiTileSet :: TileSet,
 > 	  uiTerrainSurfaces :: [(ResolutionInfo, TerrainSurfaces)],
->	  uiTerrainMap :: TerrainMap,
->         uiTerrainMapSize :: (Int, Int),
+>	  uiTerrainMap :: GameMap,
 >         uiConsole :: UIConsole,
 >         uiConsoleVisible :: Bool,
 >         uiCurrentTile :: TerrainID,
@@ -39,9 +41,15 @@ is considered the current resolution of art to be used.
 >     }
 
 
+Helper function to codify what the current resolution is.
+
 > currentResolution :: UIState -> (ResolutionInfo, TerrainSurfaces)
 > currentResolution ui = head $ uiTerrainSurfaces ui
 
+
+Defines the UIConsole data type which has it's own viewport and
+SDL.Surface to draw on. Keeps all current input in a separate 
+string until processed.
 
 > data UIConsole = UIConsole 
 >     {
@@ -51,6 +59,12 @@ is considered the current resolution of art to be used.
 >         cTextLog :: [String],
 >         cCurrentLine :: String
 >     }
+
+
+This helper function creates the SDL surface for tile selection
+window. 
+
+Housed in this module until a better home can be found.
 
 > createTileSelectSurface :: Int -> Int -> IO SDL.Surface
 > createTileSelectSurface w h = do

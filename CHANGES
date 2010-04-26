@@ -1,14 +1,14 @@
-Strat version history
+Exit Strategy version history
 
-Version 0.0.3 (current)
+Version 0.0.3
 =============
 
-BROKE: probably busted cross-platform on relative art paths
-BROKE: many comments are out of sync. need to review all comments in all files.
-
-TODO: resizable window
-TODO: console commands to load and save file
-
+* Project now has an actual name.
+* Now using System.Path from pathtype for cross-platform system paths.
+  Maps will be saved in your user app directory by default -- on UNIX
+  systems this will be $HOME/.ExitStrategy/maps.
+* UIConsole now resizes with video resolution.
+* Added ability to resize window to change video resolution.
 * Clicking the left mouse button sets the tile at the location to the 
   tile shown in the selection box at the lower right column.
 * Added a tile selection window to the lower right hand corner. The selected
@@ -23,6 +23,9 @@ TODO: console commands to load and save file
 * Implemented UIConsole basics. Displays and accepts text.
   Functions implemented:
      :mapsize x y
+     :randomize x y
+     :savemap fn
+     :loadmap fn
 * Added Bitstream Vera monospace font - license included.
 * Cleaned up the eventLoop function.
 

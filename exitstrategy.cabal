@@ -1,4 +1,4 @@
-Name:                strat
+Name:                ExitStrategy
 Version:             0.0.3
 Stability:	     experimental
 Synopsis:	     Turn based strategy game using SDL
@@ -10,15 +10,15 @@ Maintainer:          tdb@animal-machine.com
 Build-Type:          Simple
 Cabal-Version:       >=1.6
 Category:	     Game
-Homepage:	     http://www.animal-machine.com
+Homepage:	     http://www.animal-machine.com/blog/exit-strategy
 
 Data-Files:          art/64x74/*.png, art/32x37/*.png, art/128x148/*.png, 
 		     art/fonts/VeraMono.ttf,art/fonts/VeraMono-COPYRIGHT.TXT,
 		     art/svg/*.svg
 
-Executable strat
-  Main-is:           Strat.lhs
+Executable exitstrategy-editor
+  Main-is:           Editor.lhs
   Other-modules:     UITypes, UIConsole, TileSet, GameMap, Utils
   Build-Depends:     base >= 4, containers, random, SDL, SDL-image, SDL-ttf,
-                      json
+                     json, pathtype
 

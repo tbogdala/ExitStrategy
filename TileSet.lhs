@@ -3,8 +3,20 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 
 > module TileSet where
 
+This module houses functions related to TileSet objects.
+
 > import Text.JSON 
 > import Utils
+
+
+Defines a TileSet. This is meant to be a way the user can customize
+the look of the game with new graphics. 
+
+The name of a tile set is references in a GameMap save file.
+
+For each ResolutionInfo defined, a set of surfaces will be loaded
+for the MapTiles listed here. With 3 resolutions and 6 tiles, a total
+of 18 surfaces will be loaded.
 
 > data TileSet = TileSet
 >     {
@@ -14,12 +26,28 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 >       tsTiles :: [MapTile]
 >     } deriving (Eq, Show)
 
+
+ResolutionInfo is a way to support multiple graphic resolutions. A set
+of MapTiles will be loaded for each ResolutionInfo defined.
+
+riTileWidth and riTileHeight should be set to the dimensions of the
+hex tiles for the resolution.
+
+riDirPath should be a list of strings that can be combined into a 
+relative path (e.g. ["art", "64x74"] for "art/64x74").
+
 > data ResolutionInfo = ResolutionInfo
 >     {
->       riDirPath :: String,
+>       riDirPath :: [String],
 >       riTileWidth :: Int,
 >       riTileHeight :: Int
 >     } deriving (Eq, Show)
+
+
+
+Each MapTile has a name, which will be used as a TerrainID and a
+file name to load. The file name should reside in the ResolutionInfo's
+riDirPath.
 
 > data MapTile = MapTile
 >     {
@@ -28,7 +56,11 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 >     } deriving (Eq, Show)
 
 
-Loads a tileset from a file.
+
+Helper function that loads a TileSet from a file. If the TileSet
+cannot be parsed from the JSON file, fail is called. 
+
+FIXME: Handle the fail case better.
 
 > getTileSetFromFile :: String -> IO TileSet
 > getTileSetFromFile fp = do
@@ -39,6 +71,8 @@ Loads a tileset from a file.
 >         Error s -> fail $ "Error parsing tileset (" ++ fp ++  "): " ++ s
 
 
+Boilerplate code to encode/decode JSON instances of TileSet and related 
+data types. See the GameMap.lhs file for further commentary on this.
 
 > instance JSON TileSet where
 >    showJSON ts = makeObj
