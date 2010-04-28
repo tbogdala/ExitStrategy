@@ -1,5 +1,5 @@
 Name:                ExitStrategy
-Version:             0.0.3
+Version:             0.0.4
 Stability:	     experimental
 Synopsis:	     Turn based strategy game using SDL
 Description:         Turn based strategy game using SDL
@@ -15,6 +15,12 @@ Homepage:	     http://www.animal-machine.com/blog/exit-strategy
 Data-Files:          art/64x74/*.png, art/32x37/*.png, art/128x148/*.png, 
 		     art/fonts/VeraMono.ttf,art/fonts/VeraMono-COPYRIGHT.TXT,
 		     art/svg/*.svg
+
+Executable exitstrategy
+  Main-is:           Game.lhs
+  Other-modules:     Utils, UserSettings, UserInterface, TileSet
+  Build-Depends:     base >= 4, containers, random, SDL, SDL-image, SDL-ttf,
+                     json, directory, filepath, transformers
 
 Executable exitstrategy-editor
   Main-is:           Editor.lhs

@@ -52,3 +52,4 @@ Returns a pair representing (width, height) fo the SDL.Surface.
 >         h = SDL.surfaceGetHeight s
 >     in 
 >         (w , h)
+

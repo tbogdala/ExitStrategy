@@ -5,9 +5,16 @@ GPL version 3 or later (see http://www.gnu.org/licenses/gpl.html)
 
 This module houses functions related to TileSet objects.
 
+> import Data.Either
 > import Text.JSON 
+> import System.FilePath
+> import qualified Graphics.UI.SDL as SDL
+> import qualified Graphics.UI.SDL.Image as SDLi
+
 > import Utils
 
+
+> type ResolutionTerrainSurfaces = [(ResolutionInfo, TerrainSurfaces)]
 
 Define the current version of the TileSet file format.
 
@@ -63,18 +70,19 @@ riDirPath.
 
 
 
-Helper function that loads a TileSet from a file. If the TileSet
-cannot be parsed from the JSON file, fail is called. 
+Helper function that loads a TileSet from a file. 
+If the TileSet cannot be parsed from the JSON file Left is returned.
 
-FIXME: Handle the fail case better.
-
-> getTileSetFromFile :: String -> IO TileSet
+> getTileSetFromFile :: String -> IO (Either String TileSet)
 > getTileSetFromFile fp = do
->     f <- readFile fp
->     let ts =  decode f :: Result TileSet
->     case ts of
->         Ok set -> return set
->         Error s -> fail $ "Error parsing tileset (" ++ fp ++  "): " ++ s
+>     tryRead `catch` (\_ -> return $ Left $ "Error reading tile set file. (" ++ fp ++ ")")
+>   where
+>     tryRead = do
+>         f <- readFile fp
+>         let ts =  decode f :: Result TileSet
+>         case ts of
+>             Ok set -> return $ Right set
+>             Error s -> return $ Left $ "Error parsing tileset (" ++ fp ++  "): " ++ s
 
 
 Boilerplate code to encode/decode JSON instances of TileSet and related 
@@ -124,3 +132,30 @@ data types. See the GameMap.lhs file for further commentary on this.
 >        fn <- lookupM "fileName" objA >>= readJSON
 >        return $ MapTile n fn
 
+
+In an IO action, load all of the artwork used in the map. The files are all
+referenced inside the TileSet object passed in.
+
+The tileSurfs local function loads all tiles inside a given resolution directory.
+The loadFile function will load a given file (mt) in a given directory 
+(resInfo.dirPath)
+
+
+> loadArt :: TileSet -> IO (Either String ResolutionTerrainSurfaces)
+> loadArt tileSet = do
+>     let mapTiles = (tsTiles tileSet)
+>     (loadAllSurfs mapTiles) `catch` (\_ -> return $ Left $ "Failed to load tiles.")
+>   where
+>     tileSurfs tiles resInfo = do
+>         tsurfs <- mapM (loadFile resInfo) tiles
+>         return (resInfo, tsurfs)
+>     loadFile resInfo mt = do
+>         let resdir = joinPath (riDirPath resInfo)
+>             fp = combine resdir (mtFileName mt)
+>         s  <- SDLi.load fp
+>         s' <- SDL.displayFormatAlpha s
+>         SDL.freeSurface s
+>         return ((mtName mt), s')
+>     loadAllSurfs mapTiles = do 
+>         allSurfs <- mapM (tileSurfs mapTiles) $ tsResolutions tileSet
+>         return $ Right allSurfs

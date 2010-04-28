@@ -1,5 +1,23 @@
 Exit Strategy version history
 
+(HEAD)
+=====
+
+* TODO: Check into better error handling with Either. Got to be a better way than
+  all of the big branches.
+* TODO: Blocks of liftIO??
+* FIXME: netbook's immediate maximise doesn't trigger a video resize.
+
+
+* Better error checking when loading files. The program will still bail out 
+  if it cannot load the art resource it wants, but at least it does it on
+  purpose now.
+* Basic event loop and handling.
+* Implemented UserInterfaceState (different from UIState in the editor for now!)
+  uses the StateT monad.
+* Implemented UserSettings - JSON configuration file.
+* Started new exitstrategy executable for the game itself.
+
 
 Version 0.0.3
 =============

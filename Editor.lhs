@@ -30,7 +30,7 @@ Define defaults used for this demo related to art and video.
 > mapColumns = 20
 
 > gameFontFile = FP.joinPath ["art", "fonts", "VeraMono.ttf"]
-> defaultTileSetFP = FP.combine "art" "Default.tiles"
+> defaultTileSetFile = FP.combine "art" "Default.tiles"
 
 Hardcoded constraints for the tile selection window surface. 
 This should be bigger than the largest tile reference in the TileSet.
@@ -39,30 +39,6 @@ This should be bigger than the largest tile reference in the TileSet.
 > tileSelWindowW = 200
 
 
-In an IO action, load all of the artwork used in the map. The files are all
-referenced inside the TileSet object passed in.
-
-The tileSurfs local function loads all tiles inside a given resolution directory.
-The loadFile function will load a given file (mt) in a given directory 
-(resInfo.dirPath)
-
-
-> loadArt :: TileSet -> IO [(TS.ResolutionInfo, TerrainSurfaces)]
-> loadArt tileSet = do
->     let mapTiles = (TS.tsTiles tileSet)
->     allSurfs <- mapM (tileSurfs mapTiles) $ TS.tsResolutions tileSet
->     return allSurfs
->   where
->     tileSurfs tiles resInfo = do
->         tsurfs <- mapM (loadFile resInfo) tiles
->         return (resInfo, tsurfs)
->     loadFile resInfo mt = do
->         let resdir = FP.joinPath (TS.riDirPath resInfo)
->             fp = FP.combine resdir (TS.mtFileName mt)
->         s  <- SDLi.load fp
->         s' <- SDL.displayFormatAlpha s
->         SDL.freeSurface s
->         return ((TS.mtName mt), s')
 
 
 
@@ -253,6 +229,25 @@ This function will be called every time the window is resized.
 >              [SDL.HWSurface, SDL.DoubleBuf, SDL.Resizable] 
 >     return s
 
+This function loads all of the art resources needed and returns them
+as a giant tuple wrapped in a maybe. If any of these fail to load,
+Nothing will be returnede
+
+> loadResources :: IO (Maybe (SDLt.Font, TS.TileSet, ResolutionTerrainSurfaces))
+> loadResources = do
+>   fontM <- SDLt.tryOpenFont gameFontFile 16
+>   case fontM of
+>     Nothing -> putStrLn ("Failed to load font file : " ++ gameFontFile) >> return Nothing
+>     Just font -> do
+>       tileSetE <- TS.getTileSetFromFile defaultTileSetFile
+>       case tileSetE of
+>         Left tsErr -> putStrLn ("Failed to load tile set. " ++ tsErr) >> return Nothing
+>         Right tileSet -> do
+>           tileSurfsE <- TS.loadArt tileSet
+>           case tileSurfsE of
+>             Left tssErr -> putStrLn ("Failed to load tiles." ++ tssErr) >> return Nothing
+>             Right tileSurfs -> return $ Just (font, tileSet, tileSurfs)
+
 
 The main worker beast for the program. 
 
@@ -274,22 +269,25 @@ The main worker beast for the program.
 >      SDL.setCaption (appName ++ "- Editor") (appName ++ "-Editor")
 >
 >      mainSurf <- SDL.getVideoSurface
->      tileSet <- TS.getTileSetFromFile defaultTileSetFP
->      tileSurfs <- loadArt tileSet
->      randomMap <- makeRandomMap tileSet mapColumns mapRows
+
+>      resM <- loadResources
+>      case resM of 
+>        Nothing -> putStrLn "Failed to load resources." >> SDL.quit
+>        Just (font, tileSet, tileSurfs) -> do
+>          randomMap <- makeRandomMap tileSet mapColumns mapRows
 >
->      font <- SDLt.openFont gameFontFile 16
->      uiConsole <- createUIConsole 0 0 defaultWindowWidth font
->      tileSelectSurf <- createTileSelectSurface tileSelWindowW tileSelWindowH
->      let initialUI = UIState (SDL.Rect 0 0 defaultWindowWidth defaultWindowHeight) 
->                              [] mainSurf tileSelectSurf tileSet tileSurfs 
->                              randomMap uiConsole False (tsDefaultTileName tileSet)
->                              defaultKeyHandler
->      eventLoop initialUI 
+>          font <- SDLt.openFont gameFontFile 16
+>          uiConsole <- createUIConsole 0 0 defaultWindowWidth font
+>          tileSelectSurf <- createTileSelectSurface tileSelWindowW tileSelWindowH
+>          let initialUI = UIState (SDL.Rect 0 0 defaultWindowWidth defaultWindowHeight) 
+>                                  [] mainSurf tileSelectSurf tileSet tileSurfs 
+>                                  randomMap uiConsole False (tsDefaultTileName tileSet)
+>                                  defaultKeyHandler
+>          eventLoop initialUI 
 >
->      mapM_ freeResSurfs tileSurfs
->      SDL.enableUnicode False
->      SDL.quit
+>          mapM_ freeResSurfs tileSurfs
+>          SDL.enableUnicode False
+>          SDL.quit
 >  where
 >      freeResSurfs (resInfo, tsurfs) = mapM_ freeSurf tsurfs
 >      freeSurf (_ , surf) = SDL.freeSurface surf
