@@ -34,17 +34,8 @@ This is the main file for the game executable.
 >         Left err -> putStrLn err >> return US.defaultUserSettings
 >         Right us -> return us
 
- loadUIResources :: UI.UIStateIO ()
- loadUIResources = do
-     let baseDir = FP.combine "art" "ui"
-     let testFile = FP.combine "Background.png"
-     return $ execStateT (getArtResource testFile) $ UserInterfaceState 
 
-   where
-     loadFiles (fn: fns) 
-
-
-This function loads all of the art resources needed and returns them
+This function loads som of the art resources needed and returns them
 as a giant tuple wrapped in a maybe. If any of these fail to load,
 Nothing will be returnede
 
@@ -82,10 +73,10 @@ Nothing will be returnede
 >          case resM of 
 >            Nothing -> putStrLn "Failed to load resources." >> SDL.quit
 >            Just (font, tileSet, tileSurfs) -> do
->              MTS.evalStateT runGame $ UI.newUIState us font tileSet tileSurfs
+>              endState <- MTS.execStateT runGame $ UI.newUIState us font tileSet tileSurfs
 >              SDL.enableUnicode False
 >              SDL.quit
->              wsE <- writeUserSettings us
+>              wsE <- writeUserSettings $ UI.uisUserSettings endState
 >              case wsE of
 >                Left wsErr -> putStrLn wsErr
 >                Right _ -> putStrLn "done"
@@ -106,9 +97,8 @@ Nothing will be returnede
 >               let us = UI.uisUserSettings uis
 >               liftIO $ SDL.setVideoMode x y 32 
 >                            [SDL.HWSurface, SDL.DoubleBuf, SDL.Resizable] 
->               MTS.put $ uis { UI.uisUserSettings = us { US.usWindowHeight = y,
->                                                         US.usWindowWidth = x } }
->               liftIO $ putStrLn "Video resize!"
+>               let us' = us { US.usWindowHeight = y, US.usWindowWidth = x }
+>               MTS.put $ uis { UI.uisUserSettings = us'  }
 >               eventLoop
 >           _ -> eventLoop
 
@@ -116,17 +106,7 @@ Nothing will be returnede
 > drawScreen :: UI.UIStateIO ()
 > drawScreen = do
 >     mainSurf <- liftIO $ SDL.getVideoSurface
->     Just bgSurf <- UI.getUIResource "art/ui/Background.png" 
->     Just titleSurf <- UI.getUIResource "art/ui/MainLogo.png"
->     Just singleSurf <- UI.getUIResource "art/ui/SinglePlayer.png"
->     Just multiSurf <- UI.getUIResource "art/ui/MultiPlayer.png"
->     Just exitSurf <- UI.getUIResource "art/ui/ExitGame.png"
-
 >     liftIO $ SDL.fillRect mainSurf Nothing $ SDL.Pixel 0
->     liftIO $ SDL.blitSurface bgSurf Nothing mainSurf Nothing
->     liftIO $ SDL.blitSurface titleSurf Nothing mainSurf $ Just $ SDL.Rect 200 20 0 0
->     liftIO $ SDL.blitSurface singleSurf Nothing mainSurf $ Just $ SDL.Rect 300 150 0 0
->     liftIO $ SDL.blitSurface multiSurf Nothing mainSurf $ Just $ SDL.Rect 300 200 0 0
->     liftIO $ SDL.blitSurface exitSurf Nothing mainSurf $ Just $ SDL.Rect 300 250 0 0
+>     UI.drawUserInterface titleScreenLayout
 >     liftIO $ SDL.flip mainSurf
 >     return ()

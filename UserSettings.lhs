@@ -60,6 +60,7 @@ Returns Left on error or Right on success.
 >     audDir <- getAppUserDataDirectory appName
 >     let fp = combine audDir defaultUserSettingsFileName
 >     createDirectoryIfMissing True audDir
+>     putStrLn $ "writeUS:" ++ show (usWindowWidth us) ++ "x" ++ show (usWindowHeight us)
 >     (doWrite fp) `catch` (\_ -> return $ Left "Failed to write user settings file.")
 >  where
 >     doWrite fp = do writeFile fp $ encode us

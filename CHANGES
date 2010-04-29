@@ -3,12 +3,9 @@ Exit Strategy version history
 (HEAD)
 =====
 
-* TODO: Check into better error handling with Either. Got to be a better way than
-  all of the big branches.
-* TODO: Blocks of liftIO??
 * FIXME: netbook's immediate maximise doesn't trigger a video resize.
 
-
+* Implemented a basic user interface 'library' of sorts.
 * Better error checking when loading files. The program will still bail out 
   if it cannot load the art resource it wants, but at least it does it on
   purpose now.
