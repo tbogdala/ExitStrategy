@@ -100,6 +100,11 @@ Nothing will be returnede
 >               let us' = us { US.usWindowHeight = y, US.usWindowWidth = x }
 >               MTS.put $ uis { UI.uisUserSettings = us'  }
 >               eventLoop
+>           SDL.MouseButtonUp x y SDL.ButtonLeft -> do
+>               hitWidgets <- getWidgetsForClick 
+>                                 UI.titleScreenLayout (fromIntegral x) (fromIntegral y)
+>               liftIO $ putStrLn $ show hitWidgets
+>               eventLoop
 >           _ -> eventLoop
 
 
