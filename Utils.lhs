@@ -26,7 +26,7 @@ Helpful type aliases.
 > type Point = (Int, Int)
 > type TerrainID = String
 > type TerrainSurface = (TerrainID, SDL.Surface)
-> type TerrainSurfaces = [TerrainSurface]
+> type UnitSurface = (String, SDL.Surface)
 
 
 Gets the ID from the TerrainSurface pair.

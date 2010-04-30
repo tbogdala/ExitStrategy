@@ -46,6 +46,25 @@
       "name":"forrest",
       "fileName":"forrest.png"
     }
+  ],
+  "units":
+  [
+    {   
+      "name":"infantry",
+      "fileName":"SimpleInfantry.png"
+    },
+    {   
+      "name":"tank",
+      "fileName":"SimpleTank.png"
+    },
+    {   
+      "name":"artillery",
+      "fileName":"SimpleArtillery.png"
+    },
+    {   
+      "name":"helicopter",
+      "fileName":"SimpleHeli.png"
+    }
   ]
 }
 

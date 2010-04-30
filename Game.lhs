@@ -24,7 +24,7 @@ This is the main file for the game executable.
 > defaultWindowHeight = 600
 > gameFontFile = FP.joinPath ["art", "fonts", "VeraMono.ttf"]
 > defaultTileSetFile = FP.combine "art" "Default.tiles"
-
+> delayForMaxFPS = quot 1000 60 -- 60 fps target
 
 
 > getUserSettings :: IO UserSettings
@@ -39,7 +39,7 @@ This function loads som of the art resources needed and returns them
 as a giant tuple wrapped in a maybe. If any of these fail to load,
 Nothing will be returnede
 
-> loadResources :: IO (Maybe (SDLt.Font, TS.TileSet, ResolutionTerrainSurfaces))
+> loadResources :: IO (Maybe (SDLt.Font, TS.TileSet, [ResolutionSurfaces]))
 > loadResources = do
 >   fontM <- SDLt.tryOpenFont gameFontFile 16
 >   case fontM of
@@ -52,7 +52,7 @@ Nothing will be returnede
 >           tileSurfsE <- TS.loadArt tileSet
 >           case tileSurfsE of
 >             Left tssErr -> putStrLn ("Failed to load tiles." ++ tssErr) >> return Nothing
->             Right tileSurfs -> return $ Just (font, tileSet, tileSurfs)
+>             Right resSurfs -> return $ Just (font, tileSet, resSurfs)
 
 
 > main :: IO ()
@@ -72,8 +72,9 @@ Nothing will be returnede
 >          resM <- loadResources
 >          case resM of 
 >            Nothing -> putStrLn "Failed to load resources." >> SDL.quit
->            Just (font, tileSet, tileSurfs) -> do
->              endState <- MTS.execStateT runGame $ UI.newUIState us font tileSet tileSurfs
+>            Just (font, tileSet, resSurfs) -> do
+>              endState <- MTS.execStateT runGame $
+>                          UI.newUIState us font tileSet resSurfs titleScreenLayout False
 >              SDL.enableUnicode False
 >              SDL.quit
 >              wsE <- writeUserSettings $ UI.uisUserSettings endState
@@ -87,11 +88,24 @@ Nothing will be returnede
 >     eventLoop
 >     return ()
 >   where
->     eventLoop = (liftIO $ SDL.pollEvent) >>= checkEvent
+>     eventLoop = do 
+>         uis <- MTS.get
+>         if uisQuitting uis
+>             then return ()
+>             else (liftIO $ SDL.pollEvent) >>= checkEvent
 >     checkEvent e = do
 >         case e of
->           SDL.NoEvent -> drawScreen >>  (liftIO $ SDL.waitEventBlocking) >>= checkEvent
->           SDL.KeyDown _ -> return ()
+>           SDL.NoEvent -> do
+>               drawScreen 
+>               liftIO $ SDL.delay delayForMaxFPS
+>               e <- liftIO $ SDL.pollEvent
+>               checkEvent e
+>           SDL.KeyDown ks -> do
+>               uis <- MTS.get
+>               let cl = uisCurrentLayout uis 
+>                   clKH = uilKeyHandler cl
+>               clKH ks
+>               eventLoop 
 >           SDL.VideoResize x y -> do
 >               uis <- MTS.get
 >               let us = UI.uisUserSettings uis
@@ -101,17 +115,19 @@ Nothing will be returnede
 >               MTS.put $ uis { UI.uisUserSettings = us'  }
 >               eventLoop
 >           SDL.MouseButtonUp x y SDL.ButtonLeft -> do
->               hitWidgets <- getWidgetsForClick 
->                                 UI.titleScreenLayout (fromIntegral x) (fromIntegral y)
->               liftIO $ putStrLn $ show hitWidgets
+>               uis <- MTS.get
+>               let cl = UI.uisCurrentLayout uis
+>                   cllmbh = uilLMBHandler cl
+>               cllmbh (fromIntegral x) (fromIntegral y) SDL.ButtonLeft
 >               eventLoop
 >           _ -> eventLoop
 
 
 > drawScreen :: UI.UIStateIO ()
 > drawScreen = do
+>     uis <- MTS.get
 >     mainSurf <- liftIO $ SDL.getVideoSurface
 >     liftIO $ SDL.fillRect mainSurf Nothing $ SDL.Pixel 0
->     UI.drawUserInterface titleScreenLayout
+>     UI.drawUserInterface $ uisCurrentLayout uis
 >     liftIO $ SDL.flip mainSurf
 >     return ()

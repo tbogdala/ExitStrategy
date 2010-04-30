@@ -14,7 +14,13 @@ This module houses functions related to TileSet objects.
 > import Utils
 
 
-> type ResolutionTerrainSurfaces = [(ResolutionInfo, TerrainSurfaces)]
+
+> data ResolutionSurfaces = ResolutionSurfaces 
+>     {
+>         rsiResolutionInfo :: ResolutionInfo,
+>         rsiTerrainSurfaces :: [(String, SDL.Surface)],
+>         rsiUnitSurfaces :: [(String, SDL.Surface)]
+>     }
 
 Define the current version of the TileSet file format.
 
@@ -36,7 +42,8 @@ of 18 surfaces will be loaded.
 >       tsName :: String,
 >       tsDefaultTileName :: String,
 >       tsResolutions :: [ResolutionInfo],
->       tsTiles :: [MapTile]
+>       tsTiles :: [MapTile],
+>       tsUnits :: [UnitTile]
 >     } deriving (Eq, Show)
 
 
@@ -69,6 +76,15 @@ riDirPath.
 >     } deriving (Eq, Show)
 
 
+Each UnitTile has a name, which is used as an ID, an a file name
+to load. The file name should reside in the ResolutionInfo's ridirPath.
+
+> data UnitTile = UnitTile
+>     {
+>      utName :: String,
+>      utFileName :: String
+>     } deriving (Eq, Show)
+
 
 Helper function that loads a TileSet from a file. 
 If the TileSet cannot be parsed from the JSON file Left is returned.
@@ -95,6 +111,7 @@ data types. See the GameMap.lhs file for further commentary on this.
 >        , ("defaultTileName", showJSON $ tsDefaultTileName ts)
 >        , ("resolutions", showJSON $ tsResolutions ts)
 >        , ("tiles", showJSON $ tsTiles ts)
+>        , ("units", showJSON $ tsUnits ts)
 >        ]
 >
 >    readJSON (JSObject obj) = do
@@ -104,7 +121,8 @@ data types. See the GameMap.lhs file for further commentary on this.
 >        defaultTile <- lookupM "defaultTileName" objA >>= readJSON
 >        resDirs <- lookupM "resolutions" objA >>= readJSON
 >        tiles <- lookupM "tiles" objA >>= readJSON
->        return $ TileSet v name defaultTile resDirs tiles
+>        units <- lookupM "units" objA >>= readJSON
+>        return $ TileSet v name defaultTile resDirs tiles units
 
 > instance JSON ResolutionInfo where
 >    showJSON ri = makeObj
@@ -132,6 +150,18 @@ data types. See the GameMap.lhs file for further commentary on this.
 >        fn <- lookupM "fileName" objA >>= readJSON
 >        return $ MapTile n fn
 
+> instance JSON UnitTile where
+>     showJSON ut = makeObj
+>        [ ("name", showJSON $ utName ut)
+>        , ("fileName", showJSON $ utFileName ut)
+>        ]
+>     readJSON (JSObject obj) = do
+>        let objA = fromJSObject obj
+>        n <- lookupM "name" objA >>= readJSON
+>        fn <- lookupM "fileName" objA >>= readJSON
+>        return $ UnitTile n fn
+
+
 
 In an IO action, load all of the artwork used in the map. The files are all
 referenced inside the TileSet object passed in.
@@ -141,21 +171,23 @@ The loadFile function will load a given file (mt) in a given directory
 (resInfo.dirPath)
 
 
-> loadArt :: TileSet -> IO (Either String ResolutionTerrainSurfaces)
+> loadArt :: TileSet -> IO (Either String [ResolutionSurfaces])
 > loadArt tileSet = do
 >     let mapTiles = (tsTiles tileSet)
->     (loadAllSurfs mapTiles) `catch` (\_ -> return $ Left $ "Failed to load tiles.")
+>         unitTiles = (tsUnits tileSet)
+>     (loadAllSurfs mapTiles unitTiles) `catch` (\_ -> return $ Left $ "Failed to load tiles.")
 >   where
->     tileSurfs tiles resInfo = do
->         tsurfs <- mapM (loadFile resInfo) tiles
->         return (resInfo, tsurfs)
->     loadFile resInfo mt = do
+>     loadAllSurfs mapTiles unitTiles = do 
+>         allSurfs <- mapM (loadResolution mapTiles unitTiles) $ tsResolutions tileSet
+>         return $ Right allSurfs
+>     loadResolution tiles units resInfo = do
+>         usurfs <- mapM (\u -> loadFile resInfo (utName u) (utFileName u)) units
+>         tsurfs <- mapM (\t -> loadFile resInfo (mtName t) (mtFileName t)) tiles
+>         return $ ResolutionSurfaces resInfo tsurfs usurfs
+>     loadFile resInfo dName dFilePath = do
 >         let resdir = joinPath (riDirPath resInfo)
->             fp = combine resdir (mtFileName mt)
+>             fp = combine resdir dFilePath
 >         s  <- SDLi.load fp
 >         s' <- SDL.displayFormatAlpha s
 >         SDL.freeSurface s
->         return ((mtName mt), s')
->     loadAllSurfs mapTiles = do 
->         allSurfs <- mapM (tileSurfs mapTiles) $ tsResolutions tileSet
->         return $ Right allSurfs
+>         return (dName, s')
