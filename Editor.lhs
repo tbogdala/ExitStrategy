@@ -54,14 +54,14 @@ to be flipped before the effects of this function can be seen.
 >          mainSurf = uiMainSurface ui
 >          terrainSurfs = uiTerrainSurfaces ui
 >          resSurfs = currentResolution ui
->          tileWidth = TS.riTileWidth $ fst resSurfs
->          tileHeight = TS.riTileHeight $ fst resSurfs
+>          tileWidth = TS.riTileWidth $ (rsiResolutionInfo resSurfs)
+>          tileHeight = TS.riTileHeight $ (rsiResolutionInfo resSurfs)
 >          tm = gmLocations $ uiTerrainMap ui
 >          sr = Just (SDL.Rect 0 0 tileWidth tileHeight)
 >          (tX, tY) = gamePoint2View vp $ getHexmapOffset tileWidth tileHeight x y
 >	   dr = Just $ SDL.Rect tX tY 0 0
 >      	   gml = DM.fromJust $ DMap.lookup (x,y) tm
->      	   terrainSurf = DM.fromJust $ lookup (gmlTileName gml) $ snd resSurfs
+>      	   terrainSurf = DM.fromJust $ lookup (gmlTileName gml) $ (rsiTerrainSurfaces resSurfs)
 >      if tileInViewPort vp tileWidth tileHeight (tX,tY)
 >          then do
 >	   	 SDL.blitSurface terrainSurf sr mainSurf dr
@@ -233,7 +233,7 @@ This function loads all of the art resources needed and returns them
 as a giant tuple wrapped in a maybe. If any of these fail to load,
 Nothing will be returnede
 
-> loadResources :: IO (Maybe (SDLt.Font, TS.TileSet, ResolutionTerrainSurfaces))
+> loadResources :: IO (Maybe (SDLt.Font, TS.TileSet, [ResolutionSurfaces]))
 > loadResources = do
 >   fontM <- SDLt.tryOpenFont gameFontFile 16
 >   case fontM of
@@ -243,10 +243,10 @@ Nothing will be returnede
 >       case tileSetE of
 >         Left tsErr -> putStrLn ("Failed to load tile set. " ++ tsErr) >> return Nothing
 >         Right tileSet -> do
->           tileSurfsE <- TS.loadArt tileSet
->           case tileSurfsE of
+>           resSurfsE <- TS.loadArt tileSet
+>           case resSurfsE of
 >             Left tssErr -> putStrLn ("Failed to load tiles." ++ tssErr) >> return Nothing
->             Right tileSurfs -> return $ Just (font, tileSet, tileSurfs)
+>             Right resSurfs -> return $ Just (font, tileSet, resSurfs)
 
 
 The main worker beast for the program. 
@@ -289,7 +289,9 @@ The main worker beast for the program.
 >          SDL.enableUnicode False
 >          SDL.quit
 >  where
->      freeResSurfs (resInfo, tsurfs) = mapM_ freeSurf tsurfs
+>      freeResSurfs (ResolutionSurfaces _ tsurfs usurfs) = do
+>          mapM_ freeSurf tsurfs
+>          mapM_ freeSurf usurfs
 >      freeSurf (_ , surf) = SDL.freeSurface surf
 
 
@@ -351,18 +353,18 @@ Mouse button state is tracked in the UIState object.
 >                      else eventLoop ui
 >         SDL.MouseButtonDown _ _ SDL.ButtonWheelUp -> do
 >             let oldOrder = uiTerrainSurfaces ui
->             let (oR, _) = head oldOrder
->             let newFirst@(nR, _) = last oldOrder
+>             let oldResInfo = rsiResolutionInfo $ head oldOrder
+>             let newFirst = last oldOrder
 >             let rotated = [newFirst] ++ (init oldOrder)
->             if (TS.riTileWidth nR) < (TS.riTileWidth oR)
+>             if (TS.riTileWidth $ rsiResolutionInfo newFirst) < (TS.riTileWidth oldResInfo)
 >                 then eventLoop $ ui { uiTerrainSurfaces = rotated }
 >                 else eventLoop ui
 >         SDL.MouseButtonDown _ _ SDL.ButtonWheelDown -> do
 >             let oldOrder = uiTerrainSurfaces ui
->             let (oR, _) = head oldOrder
->             let newFirst@(nR, _) = head $ tail oldOrder
+>             let oldResInfo = rsiResolutionInfo $ head oldOrder
+>             let newFirst = head $ tail oldOrder
 >             let rotated = (tail oldOrder) ++ [(head oldOrder)]
->             if (TS.riTileWidth oR) < (TS.riTileWidth nR)
+>             if (TS.riTileWidth oldResInfo) < (TS.riTileWidth $ rsiResolutionInfo newFirst)
 >                 then eventLoop $ ui { uiTerrainSurfaces = rotated }
 >                 else eventLoop ui
 >         SDL.MouseButtonDown x y b -> do
@@ -387,8 +389,8 @@ If there is not a tile underneath the mouse, nothing is done.
 > changeTile x y ui= 
 >         let (gx, gy) = viewPoint2Game (x,y) $ uiViewPort ui
 >             resSurfs = currentResolution ui
->             tileWidth = TS.riTileWidth $ fst resSurfs
->             tileHeight = TS.riTileHeight $ fst resSurfs
+>             tileWidth = TS.riTileWidth $ rsiResolutionInfo resSurfs
+>             tileHeight = TS.riTileHeight $ rsiResolutionInfo resSurfs
 >             gameMap = uiTerrainMap ui
 >             c = getMapCoordinate tileWidth tileHeight ((gmWidth gameMap), (gmHeight gameMap)) (gx,gy)
 >             newID = uiCurrentTile ui
@@ -411,8 +413,8 @@ the user to scroll away too far; some of the map must remain on screen.
 > rightMouseBMHandler ui xr yr =  ui { uiViewPort = updatedVP }
 >     where	
 >         resSurfs = currentResolution ui
->         tileWidth = TS.riTileWidth $ fst resSurfs
->         tileHeight = TS.riTileHeight $ fst resSurfs
+>         tileWidth = TS.riTileWidth $ rsiResolutionInfo resSurfs
+>         tileHeight = TS.riTileHeight $ rsiResolutionInfo resSurfs
 >         windowWidth = SDL.rectW $ uiViewPort ui
 >         windowHeight = SDL.rectH $ uiViewPort ui
 >         vp = uiViewPort ui
@@ -455,11 +457,12 @@ to the beginning if necessary.
 > shiftTileSelectRight ui = ui { uiCurrentTile = newID }
 >   where
 >     currentID = uiCurrentTile ui
->     (_ , ts) = currentResolution ui
->     newID = getNextId currentID ts
->     getNextId c ts = nextLoop c ts ts
+>     resInfo = currentResolution ui
+>     ts = (rsiTerrainSurfaces resInfo)
+>     newID = getNextId currentID 
+>     getNextId c = nextLoop c ts ts
 
->     nextLoop :: TerrainID -> TerrainSurfaces -> TerrainSurfaces -> TerrainID
+>     nextLoop :: TerrainID -> [(String,SDL.Surface)] -> [(String,SDL.Surface)] -> TerrainID
 >     nextLoop c all [] = getTerrainSurfaceID $ head $ all
 >     nextLoop c all (t : ts) = 
 >         if c == getTerrainSurfaceID t
@@ -477,7 +480,7 @@ the end of the list if necessary.
 > shiftTileSelectLeft ui = ui { uiCurrentTile = newID }
 >   where
 >     currentID = uiCurrentTile ui
->     (_ , ts) = currentResolution ui
+>     ts = rsiTerrainSurfaces $ currentResolution ui
 >     newID = getNextId currentID ts
 >     getNextId c ts = nextLoop c ts (head ts) (tail ts)
 
@@ -565,7 +568,7 @@ a hardcoded buffer of 5 pixels given for this
 >         (tselW, tselH) = getSurfaceWH tselSurf
 >         (mainW, mainH) = getSurfaceWH mainSurf
 >
->         (_ , ts) = currentResolution ui
+>         ts = rsiTerrainSurfaces $ currentResolution ui
 >         Just tileSurf = lookup (uiCurrentTile ui) ts
 >         (tileW, tileH) = getSurfaceWH tileSurf
 >         clipW = tileW + 10

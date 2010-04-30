@@ -29,64 +29,126 @@ This is the data that will be housed in the state.
 >         uisUserSettings :: US.UserSettings,
 >         uisGameFont :: SDLt.Font,
 >         uisTileSet :: TS.TileSet,
->         uisTileSurfaces :: TS.ResolutionTerrainSurfaces,
->         uisLoadedRes :: DM.Map String SDL.Surface 
->     } deriving (Eq, Show)
+>         uisTileSurfaces :: [TS.ResolutionSurfaces],
+>         uisLoadedRes :: DM.Map String SDL.Surface,
+>         uisCurrentLayout :: UILayout ,
+>         uisQuitting :: Bool
+>     } 
+
+This determines the location of the UIWidget.
+
+'Exact' gives an exact x,y location. 
+
+'CenterScreen' centers the UIWidget in the center of the screen 
+with the supplied modifications to the center x,y point.
 
 > data UILayoutPosition = Exact Int Int          -- x,y
 >                         | CenterScreen Int Int -- xmod ymod
->      deriving (Eq, Show)
+>   deriving (Eq, Show)
 
 
-
-> data UIWidget = UIButton {
->                     uibImageFilePath :: String,
->                     uibPosition :: UILayoutPosition,
->                     uibZOrder :: Int,
->                     uibAction :: [UIAction]
+> data UIWidget = UIWidget {
+>                     uiwImageFilePath :: String,
+>                     uiwPosition :: UILayoutPosition,
+>                     uiwZOrder :: Int,
+>                     uiwActions :: [UIAction]
 >                 } deriving (Eq, Show)
 
-> data UILayout = UILayout {
->                     uilWidgets :: [UIWidget]
->                 } deriving (Eq, Show)
+> data UILayout = UILayout 
+>     {
+>         uilWidgets :: [UIWidget]
+>     ,   uilKeyHandler :: SDL.Keysym -> UIStateIO ()
+>     ,   uilLMBHandler :: Int -> Int -> SDL.MouseButton -> UIStateIO ()      
+>     } 
 
-> data UIAction = SwitchGameState GameState
+> data UIAction = SwitchGameState GameUIState
 >                | ExitGame
 >     deriving (Eq, Show)
 
 
 All possible main game states.
 
-> data GameState = TitleScreen
+> data GameUIState = TitleScreen
 >                | MultiplayerTypeSelect
 >     deriving (Eq, Show)
 
+
+
+> uiDefaultKH :: SDL.Keysym -> UIStateIO ()
+> uiDefaultKH ks = do
+>     uis <- MTS.get
+>     MTS.put $ uis { uisQuitting = True } 
+>     return ()
+> uiDefaultLMBH :: Int -> Int -> SDL.MouseButton -> UIStateIO ()
+> uiDefaultLMBH x y b = do 
+>     return ()
+
+
+
 > multiplayerTypeSelectLayout :: UILayout
 > multiplayerTypeSelectLayout = UILayout
->     [ (UIButton (FP.joinPath ["art","ui","HotSeat.png"])
->                 (CenterScreen 0 (-150))
+>     [ (UIWidget (FP.joinPath ["art","ui","Background.png"])
+>                 (CenterScreen 0 0)
 >                 0 [])
+>     , (UIWidget (FP.joinPath ["art","ui","HotSeat.png"])
+>                 (CenterScreen 0 (-50))
+>                 10 [])
+>     , (UIWidget (FP.joinPath ["art","ui","Back.png"])
+>                 (CenterScreen 0 75)
+>                 11 [SwitchGameState TitleScreen])
 >     ]
+>     uiDefaultKH
+>     uiClickLMBH
+
+
 
 > titleScreenLayout :: UILayout
 > titleScreenLayout = UILayout 
->     [ (UIButton (FP.joinPath ["art","ui","Background.png"])
+>     [ (UIWidget (FP.joinPath ["art","ui","Background.png"])
 >                 (CenterScreen 0 0)
 >                 0 [])
->     , (UIButton (FP.joinPath ["art","ui","MainLogo.png"])
+>     , (UIWidget (FP.joinPath ["art","ui","MainLogo.png"])
 >                 (CenterScreen 0 (-150))
 >                 11 [])
->     , (UIButton (FP.joinPath ["art","ui","SinglePlayer.png"])
+>     , (UIWidget (FP.joinPath ["art","ui","SinglePlayer.png"])
 >                 (CenterScreen 0 (-50))
 >                 12 [])
->     , (UIButton (FP.joinPath ["art","ui","MultiPlayer.png"])
+>     , (UIWidget (FP.joinPath ["art","ui","MultiPlayer.png"])
 >                 (CenterScreen 0 0)
 >                 13 [SwitchGameState MultiplayerTypeSelect])
->     , (UIButton (FP.joinPath ["art","ui","ExitGame.png"])
+>     , (UIWidget (FP.joinPath ["art","ui","ExitGame.png"])
 >                 (CenterScreen 0 100)
 >                 14 [ExitGame])
 >     ]
+>     uiDefaultKH
+>     uiClickLMBH
 
+
+> uiClickLMBH :: Int -> Int -> SDL.MouseButton -> UIStateIO ()
+> uiClickLMBH x y b = do
+>     uis <- MTS.get
+>     hitWidgets <- getWidgetsForClick (uisCurrentLayout uis) x y 
+>     let closestWidget = head hitWidgets
+>         actions = uiwActions closestWidget
+>     if null actions
+>         then return ()
+>         else doUIAction (head $ uiwActions closestWidget) closestWidget 
+
+
+> doUIAction :: UIAction -> UIWidget -> UIStateIO ()
+> doUIAction ExitGame _ = do
+>     uis <- MTS.get
+>     MTS.put $ uis { uisQuitting = True }
+>     return ()
+> doUIAction (SwitchGameState gs) _ = do
+>     uis <- MTS.get
+>     case gs of
+>         TitleScreen -> do 
+>             MTS.put $ uis { uisCurrentLayout = titleScreenLayout }
+>             return () 
+>         MultiplayerTypeSelect -> do
+>             MTS.put $ uis { uisCurrentLayout = multiplayerTypeSelectLayout }
+>             return () 
 
 > getWidgetsForClick :: UILayout -> Int -> Int -> UIStateIO ([UIWidget])
 > getWidgetsForClick uil x y = do
@@ -95,17 +157,15 @@ All possible main game states.
 >     hits <- filterM (isCoordInsideWidget mainSurf x y) widgets
 >     return hits
 >   where
->     isCoordInsideWidget mainSurf x y w = 
->       case w of
->         (UIButton fp pos _ _) -> do
->           btnSurfM <- getUIResource fp
->           case btnSurfM of 
->               Nothing -> return False
->               Just bs -> do
->                 (SDL.Rect wx wy ww wh) <- getPositionRect mainSurf bs pos
->                 if wx <= x && x <= (wx+ww) && wy <= y && y <= (wy+wh)
->                   then return True
->                   else return False
+>     isCoordInsideWidget mainSurf x y (UIWidget fp pos _ _) = do
+>         wSurfM <- getUIResource fp
+>         case wSurfM of 
+>             Nothing -> return False
+>             Just ws -> do
+>               (SDL.Rect wx wy ww wh) <- getPositionRect mainSurf ws pos
+>               if wx <= x && x <= (wx+ww) && wy <= y && y <= (wy+wh)
+>                 then return True
+>                 else return False
 
 
 Draws all user interface components listed in the UILayout in
@@ -123,24 +183,21 @@ Returns the list of widgets for a layout ordered by ZOrder.
 (lower zorder values first -- ascending)
 
 > getWidgetsByZOrder :: UILayout -> [UIWidget]
-> getWidgetsByZOrder uil = sortBy (\a b -> compare (uibZOrder a) (uibZOrder b)) 
+> getWidgetsByZOrder uil = sortBy (\a b -> compare (uiwZOrder a) (uiwZOrder b)) 
 >                                 (uilWidgets uil)
 
 
 Performs the actual blitting onto the surface.
 
 > drawWidget :: SDL.Surface -> UIWidget -> UIStateIO (Either String () )
-> drawWidget mainSurf uiw = 
->     case uiw of
->       (UIButton fp pos _ _) -> do
->         btnSurfM <- getUIResource fp
->         case btnSurfM of 
->             Nothing -> return $ Left $ "drawWidget couldn't find " ++ fp
->             Just bs -> do
->                 dr <- getPositionRect mainSurf bs pos
->                 
->                 liftIO $ SDL.blitSurface bs Nothing mainSurf $ Just dr
->                 return $ Right ()
+> drawWidget mainSurf (UIWidget fp pos _ _) = do
+>     btnSurfM <- getUIResource fp
+>     case btnSurfM of 
+>         Nothing -> return $ Left $ "drawWidget couldn't find " ++ fp
+>         Just bs -> do
+>             dr <- getPositionRect mainSurf bs pos                 
+>             liftIO $ SDL.blitSurface bs Nothing mainSurf $ Just dr
+>             return $ Right ()
 
 
 Gets a rectangle for the widget's position on screen. 

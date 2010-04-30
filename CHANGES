@@ -4,9 +4,14 @@ Exit Strategy version history
 =====
 
 * FIXME: netbook's immediate maximise doesn't trigger a video resize.
-* TODO: implement UI actions.
+* TODO: mulitplayerSelectLayout needs a back button. PLAYER 1-8 buttons for multi
 
 
+
+
+* Added units to the tile set.
+* Implemented UI Actions and basics of a game state. UILayouts also
+  have their own input handler callbacks.
 * UI can figure out which widgets got hit by mouse-click
 * Implemented a basic user interface 'library' of sorts.
 * Better error checking when loading files. The program will still bail out 

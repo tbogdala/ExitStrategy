@@ -32,7 +32,7 @@ is considered the current resolution of art to be used.
 >	  uiMainSurface :: SDL.Surface,
 >         uiSelectedTileSurface :: SDL.Surface,
 >         uiTileSet :: TileSet,
-> 	  uiTerrainSurfaces :: [(ResolutionInfo, TerrainSurfaces)],
+> 	  uiTerrainSurfaces :: [ResolutionSurfaces],
 >	  uiTerrainMap :: GameMap,
 >         uiConsole :: UIConsole,
 >         uiConsoleVisible :: Bool,
@@ -43,7 +43,7 @@ is considered the current resolution of art to be used.
 
 Helper function to codify what the current resolution is.
 
-> currentResolution :: UIState -> (ResolutionInfo, TerrainSurfaces)
+> currentResolution :: UIState -> ResolutionSurfaces
 > currentResolution ui = head $ uiTerrainSurfaces ui
 
 
