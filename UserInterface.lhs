@@ -21,6 +21,8 @@ This is the main file for the user interface components.
 > import Utils
 > import qualified TileSet as TS
 > import qualified UserSettings as US
+> import qualified GamePacket as GP
+> import qualified Server as Server
 
 This is the data that will be housed in the state.
 
@@ -70,6 +72,7 @@ All possible main game states.
 
 > data GameUIState = TitleScreen
 >                | MultiplayerTypeSelect
+>                | StartHotSeatGame
 >     deriving (Eq, Show)
 
 
@@ -92,7 +95,7 @@ All possible main game states.
 >                 0 [])
 >     , (UIWidget (FP.joinPath ["art","ui","HotSeat.png"])
 >                 (CenterScreen 0 (-50))
->                 10 [])
+>                 10 [SwitchGameState StartHotSeatGame])
 >     , (UIWidget (FP.joinPath ["art","ui","Back.png"])
 >                 (CenterScreen 0 75)
 >                 11 [SwitchGameState TitleScreen])
@@ -152,6 +155,11 @@ All possible main game states.
 >         MultiplayerTypeSelect -> do
 >             MTS.put $ uis { uisCurrentLayout = multiplayerTypeSelectLayout }
 >             return () 
+>         StartHotSeatGame -> do
+>             cci <- liftIO $ GP.openServerConnection "localhost" GP.defaultPort
+>             let (Just cci', gp) = GP.createNewPacket (Just cci) GP.InitGameReq ""
+>             liftIO $ GP.sendPacket cci' gp
+>             return ()
 
 > getWidgetsForClick :: UILayout -> Int -> Int -> UIStateIO ([UIWidget])
 > getWidgetsForClick uil x y = do
@@ -250,6 +258,7 @@ loads it into the state and returns the newly loaded surface.
 >         SDL.freeSurface s
 >         return s'
            
+
 
 
 

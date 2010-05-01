@@ -7,6 +7,7 @@ This is the main file for the game executable.
 
 > import Data.Maybe
 > import Data.Either
+> import qualified Control.Concurrent as CC
 > import qualified Data.Map as DM
 > import qualified System.FilePath as FP
 > import qualified Graphics.UI.SDL as SDL
@@ -19,6 +20,8 @@ This is the main file for the game executable.
 > import UserSettings as US
 > import TileSet as TS
 > import UserInterface as UI
+> import Server as Server
+> import GamePacket as GP
 
 > defaultWindowWidth = 800
 > defaultWindowHeight = 600
@@ -57,6 +60,7 @@ Nothing will be returnede
 
 > main :: IO ()
 > main = do 
+>      CC.forkIO (Server.gameServer GP.defaultPort)
 >      SDL.init [SDL.InitEverything]
 >      SDLt.init
 >      SDL.enableUnicode True 

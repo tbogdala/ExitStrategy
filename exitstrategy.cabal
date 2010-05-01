@@ -18,9 +18,11 @@ Data-Files:          art/64x74/*.png, art/32x37/*.png, art/128x148/*.png,
 
 Executable exitstrategy
   Main-is:           Game.lhs
-  Other-modules:     Utils, UserSettings, UserInterface, TileSet
+  Other-modules:     Utils, UserSettings, UserInterface, TileSet, Server, GamePacket,
+                     GamePacketListener
   Build-Depends:     base >= 4, containers, random, SDL, SDL-image, SDL-ttf,
-                     json, directory, filepath, transformers
+                     json, directory, filepath, transformers, network
+
 
 Executable exitstrategy-editor
   Main-is:           Editor.lhs
