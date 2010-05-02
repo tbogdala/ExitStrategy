@@ -36,13 +36,9 @@ This is the data that will be housed in the state.
 >         uisTileSurfaces :: [TS.ResolutionSurfaces],
 >         uisLoadedRes :: DM.Map String SDL.Surface,
 >         uisCurrentLayout :: UILayout ,
-<<<<<<< HEAD
 >         uisQuitting :: Bool,
 >         uisGamePacketChan :: Chan GP.GamePacket,
 >         uisPlayerCons :: DM.Map Int GP.ClientConInfo -- key is client ID
-=======
->         uisQuitting :: Bool
->>>>>>> 346f849444c149739c35676408e5eac19e5161ec
 >     } 
 
 This determines the location of the UIWidget.
@@ -103,22 +99,13 @@ All possible main game states.
 >                 0 [])
 >     , (UIWidget (FP.joinPath ["art","ui","HotSeat.png"])
 >                 (CenterScreen 0 (-50))
-<<<<<<< HEAD
 >                 10 [SwitchGameState StartHotSeatGame])
-=======
->                 10 [])
->>>>>>> 346f849444c149739c35676408e5eac19e5161ec
 >     , (UIWidget (FP.joinPath ["art","ui","Back.png"])
 >                 (CenterScreen 0 75)
 >                 11 [SwitchGameState TitleScreen])
 >     ]
 >     uiDefaultKH
 >     uiClickLMBH
-
-<<<<<<< HEAD
-=======
-
->>>>>>> 346f849444c149739c35676408e5eac19e5161ec
 
 > titleScreenLayout :: UILayout
 > titleScreenLayout = UILayout 
@@ -141,7 +128,6 @@ All possible main game states.
 >     uiDefaultKH
 >     uiClickLMBH
 
-<<<<<<< HEAD
 
 > uiClickLMBH :: Int -> Int -> SDL.MouseButton -> UIStateIO ()
 > uiClickLMBH x y b = do
@@ -185,34 +171,7 @@ All possible main game states.
 > testCallback :: GP.ClientConInfo -> GP.GamePacket -> IO ()
 > testCallback cci gp = do
 >     putStrLn "GOT INITGAMERESP!"
-=======
->>>>>>> 346f849444c149739c35676408e5eac19e5161ec
 
-> uiClickLMBH :: Int -> Int -> SDL.MouseButton -> UIStateIO ()
-> uiClickLMBH x y b = do
->     uis <- MTS.get
->     hitWidgets <- getWidgetsForClick (uisCurrentLayout uis) x y 
->     let closestWidget = head hitWidgets
->         actions = uiwActions closestWidget
->     if null actions
->         then return ()
->         else doUIAction (head $ uiwActions closestWidget) closestWidget 
-
-
-> doUIAction :: UIAction -> UIWidget -> UIStateIO ()
-> doUIAction ExitGame _ = do
->     uis <- MTS.get
->     MTS.put $ uis { uisQuitting = True }
->     return ()
-> doUIAction (SwitchGameState gs) _ = do
->     uis <- MTS.get
->     case gs of
->         TitleScreen -> do 
->             MTS.put $ uis { uisCurrentLayout = titleScreenLayout }
->             return () 
->         MultiplayerTypeSelect -> do
->             MTS.put $ uis { uisCurrentLayout = multiplayerTypeSelectLayout }
->             return () 
 
 > getWidgetsForClick :: UILayout -> Int -> Int -> UIStateIO ([UIWidget])
 > getWidgetsForClick uil x y = do
