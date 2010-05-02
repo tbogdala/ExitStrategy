@@ -83,9 +83,13 @@ Nothing will be returnede
 >            Nothing -> putStrLn "Failed to load resources." >> SDL.quit
 >            Just (font, tileSet, resSurfs) -> do
 >              endState <- MTS.execStateT runGame $
+<<<<<<< HEAD
 >                          UI.newUIState us font tileSet resSurfs 
 >                                        titleScreenLayout False clientChan
 >                                        DM.empty
+=======
+>                          UI.newUIState us font tileSet resSurfs titleScreenLayout False
+>>>>>>> 346f849444c149739c35676408e5eac19e5161ec
 >              SDL.enableUnicode False
 >              SDL.quit
 >              wsE <- writeUserSettings $ UI.uisUserSettings endState
@@ -112,9 +116,13 @@ Nothing will be returnede
 >         uis <- MTS.get
 >         if uisQuitting uis
 >             then return ()
+<<<<<<< HEAD
 >             else do sdlEvent <- liftIO $ SDL.pollEvent
 >                     checkEvent sdlEvent
 >                     processNetwork
+=======
+>             else (liftIO $ SDL.pollEvent) >>= checkEvent
+>>>>>>> 346f849444c149739c35676408e5eac19e5161ec
 >     checkEvent e = do
 >         case e of
 >           SDL.NoEvent -> do
@@ -153,6 +161,7 @@ Nothing will be returnede
 >     UI.drawUserInterface $ uisCurrentLayout uis
 >     liftIO $ SDL.flip mainSurf
 >     return ()
+<<<<<<< HEAD
 
 
 > processNetwork :: UI.UIStateIO ()
@@ -210,3 +219,5 @@ Nothing will be returnede
      
   
      
+=======
+>>>>>>> 346f849444c149739c35676408e5eac19e5161ec
