@@ -5,7 +5,7 @@ Exit Strategy version history
 
 * FIXME: netbook's immediate maximise doesn't trigger a video resize.
 * TODO: mulitplayerSelectLayout needs a back button. PLAYER 1-8 buttons for multi
-
+* TODO: server packets are not ack'd by clients.
 
 
 

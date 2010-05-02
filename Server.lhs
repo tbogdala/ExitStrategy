@@ -32,6 +32,7 @@ for both player vs AI and player vs player.
 >                | InitializingGame
 >                | GameRunning
 >                | GameOver
+>    deriving (Show, Eq, Enum, Ord)
 
 > type ServerStateIO a = MTS.StateT GameData IO a
 
@@ -40,7 +41,7 @@ for both player vs AI and player vs player.
 
 Will return immediately if it cannot creat the listening socket.
 
-> gameServer :: String -> IO ()
+> gameServer :: Int -> IO ()
 > gameServer port = 
 >    (do ch <-GPL.makeListener port
 >        putStrLn "gameServer initialized; socket ready for listening."
@@ -57,26 +58,64 @@ Will return immediately if it cannot creat the listening socket.
 >     if emptyCh
 >         then do liftIO $ yield
 >         else do gp <- liftIO $ readChan ch
->                 let Just (SockAddrInet port host) = GP.gpSockAddr gp
->                 liftIO $ putStrLn $ "PM= Got a new packet: " ++ show host ++ " port " ++ show port
 >                 sendPacketAck gp
 >                 handlePacket gp
 >     gameServerLoop
 
+FIXME: might crash on call to head
+
 > sendPacketAck :: GamePacket -> ServerStateIO ()
 > sendPacketAck gp = do
->     let sockAddrM = GP.gpSockAddr gp
->     if isNothing sockAddrM
->         then liftIO $ putStrLn "ERROR: Tried to ACK a GamePacket with no SockAddr." >> return ()
->         else do
->             sock <- liftIO $ socket AF_INET Datagram defaultProtocol
->             let (_, ackPack) = GP.createNewPacket Nothing GP.ACK $ "ACK " ++ show (gpSeq gp)
->             liftIO $ GP.sendAnonyPacket sock (fromJust sockAddrM) ackPack
+>    let seq = gpSeq gp
+>    sendResponse gp seq GP.ACK $ "ACK " ++ show seq
+
 
 > handlePacket :: GamePacket -> ServerStateIO ()
-> handlePacket gp = do return ()
+> handlePacket gp = do 
+>    gs <- MTS.get
+>    let cmd = gpCommand gp
+>    let seq = gpSeq gp
+>    case cmd of
+>        InitGameReq -> 
+>            if gdGameState gs == NoGame
+>              then do
+>                MTS.put $ gs { gdGameState = InitializingGame }
+>                sendResponse gp seq GP.InitGameResp "True"
+>              else do
+>                sendResponse gp seq GP.InitGameResp "False"
+>        _ -> do return ()
+
+
+> sendResponse :: GamePacket -> Int -> GP.PacketCommand -> String -> ServerStateIO ()
+> sendResponse gp seq command json = do
+>   if GP.gpReturnPort gp == 0
+>    then return ()
+>    else do
+>     let sockAddrM = GP.gpSockAddr gp
+>     if isNothing sockAddrM
+>         then liftIO $ putStrLn "ERROR: Tried to respond to a GamePacket with no SockAddr." >> return ()
+>         else do
+>             let (SockAddrInet _ addr) = fromJust sockAddrM
+>             hostStr <- liftIO $ inet_ntoa addr
+>             addrinfos <- liftIO $ getAddrInfo Nothing 
+>                                               (Just hostStr) 
+>                                               (Just $ show (GP.gpReturnPort gp))
+>             let returnSockAddr = addrAddress $ head addrinfos
+
+>             sock <- liftIO $ socket AF_INET Datagram defaultProtocol
+>             let (_, ackPack) = GP.createNewPacket Nothing 
+>                                     GP.defaultPortNum 
+>                                     command 
+>                                     json
+>             liftIO $ GP.sendAnonyPacket sock returnSockAddr (ackPack { gpSeq = seq })
+>             liftIO $ putStrLn $ "Sent response to " ++ show returnSockAddr
 
 
 
 
+
+
+
+
+ 
 

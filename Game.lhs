@@ -15,6 +15,8 @@ This is the main file for the game executable.
 > import qualified Graphics.UI.SDL.TTF as SDLt
 > import qualified Control.Monad.Trans.State.Lazy as MTS
 > import Control.Monad.IO.Class (liftIO)
+> import Control.Concurrent.Chan
+> import Control.Monad
 
 > import Utils
 > import UserSettings as US
@@ -22,6 +24,8 @@ This is the main file for the game executable.
 > import UserInterface as UI
 > import Server as Server
 > import GamePacket as GP
+> import GamePacketListener as GPL
+
 
 > defaultWindowWidth = 800
 > defaultWindowHeight = 600
@@ -60,7 +64,8 @@ Nothing will be returnede
 
 > main :: IO ()
 > main = do 
->      CC.forkIO (Server.gameServer GP.defaultPort)
+>      CC.forkIO (Server.gameServer GP.defaultPortNum)
+>      Just clientChan <- makeClientListener GP.defaultClientPortNum
 >      SDL.init [SDL.InitEverything]
 >      SDLt.init
 >      SDL.enableUnicode True 
@@ -78,13 +83,24 @@ Nothing will be returnede
 >            Nothing -> putStrLn "Failed to load resources." >> SDL.quit
 >            Just (font, tileSet, resSurfs) -> do
 >              endState <- MTS.execStateT runGame $
->                          UI.newUIState us font tileSet resSurfs titleScreenLayout False
+>                          UI.newUIState us font tileSet resSurfs 
+>                                        titleScreenLayout False clientChan
+>                                        DM.empty
 >              SDL.enableUnicode False
 >              SDL.quit
 >              wsE <- writeUserSettings $ UI.uisUserSettings endState
 >              case wsE of
 >                Left wsErr -> putStrLn wsErr
 >                Right _ -> putStrLn "done"
+
+> makeClientListener :: Int -> IO (Maybe (Chan GamePacket))
+> makeClientListener port = 
+>    (do ch <- GPL.makeListener port
+>        return $ Just ch) `catch`
+>    (\e -> do putStrLn $ "Failed to make network listing socket! : " ++ show e
+>              return Nothing)
+
+
 
 > runGame :: UI.UIStateIO ()
 > runGame = do
@@ -96,7 +112,9 @@ Nothing will be returnede
 >         uis <- MTS.get
 >         if uisQuitting uis
 >             then return ()
->             else (liftIO $ SDL.pollEvent) >>= checkEvent
+>             else do sdlEvent <- liftIO $ SDL.pollEvent
+>                     checkEvent sdlEvent
+>                     processNetwork
 >     checkEvent e = do
 >         case e of
 >           SDL.NoEvent -> do
@@ -135,3 +153,60 @@ Nothing will be returnede
 >     UI.drawUserInterface $ uisCurrentLayout uis
 >     liftIO $ SDL.flip mainSurf
 >     return ()
+
+
+> processNetwork :: UI.UIStateIO ()
+> processNetwork = do
+>     uis <- MTS.get
+>     let ch = uisGamePacketChan uis
+>     emptyCh <- liftIO $ isEmptyChan ch
+>     if emptyCh
+>         then return ()
+>         else do 
+>                gp <- liftIO $ readChan ch
+>                if (GP.gpCommand gp) == GP.ACK 
+>                  then do processAck gp
+>                  else do checkCallbacks gp
+>                processNetwork
+
+> checkCallbacks :: GamePacket -> UI.UIStateIO ()
+> checkCallbacks gp = do
+>     uis <- MTS.get
+>     let pcs = uisPlayerCons uis
+>     mapM_ (checkClientID gp pcs) $ DM.keys pcs
+>   where
+>     checkClientID :: GamePacket -> DM.Map Int ClientConInfo -> Int -> UI.UIStateIO ()
+>     checkClientID gp pcs id = do
+>         let Just cci = DM.lookup id pcs
+>             cbmap = cciCallbacks cci
+>             cbsM = DM.lookup (gpCommand gp) cbmap
+>         if isNothing cbsM 
+>           then return ()
+>           else do
+>             let cbs = fromJust cbsM
+>             mapM_ (\cb -> liftIO $ cb cci gp) cbs
+>             liftIO $ putStrLn "DEBUG: callback found."
+>             return ()
+
+> processAck :: GamePacket -> UI.UIStateIO ()
+> processAck gp = do
+>     uis <- MTS.get
+>     let pcs = uisPlayerCons uis
+>         pcIdToAck = (gpClientID gp)
+>     let pcM = DM.lookup pcIdToAck pcs
+>     if isNothing pcM 
+>       then do liftIO $ putStrLn $ "ACK for unknown clientID: " ++ show pcIdToAck
+>               return ();
+>       else do let pc = fromJust pcM
+>                   seqToAck = (gpSeq gp)
+>                   needAcks = cciNeedAcks pc
+>                   filtered = filter (\p -> if (gpSeq p) == seqToAck then False else True)
+>                                     needAcks
+>               liftIO $ putStrLn $ "Processing ack for client id (" ++ show pcIdToAck ++
+>                              ") seq (" ++ show seqToAck ++ ")"
+>               let pc' = pc { cciNeedAcks = filtered }
+>               MTS.put $ uis { uisPlayerCons = DM.insert pcIdToAck pc' pcs }
+
+     
+  
+     

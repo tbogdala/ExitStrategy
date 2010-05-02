@@ -20,12 +20,12 @@ machine. This socket is just for listing for incoming packets.
 
 May throw errors!
 
-> makeListener :: String -> IO (Chan GamePacket)
+> makeListener :: Int -> IO (Chan GamePacket)
 > makeListener port = do
 >     addrinfos <- getAddrInfo
 >                  (Just (defaultHints {addrFlags = [AI_PASSIVE]}))
 >                  Nothing 
->                  (Just port)
+>                  (Just $ show port)
 >     let serveraddr = head addrinfos
 >     sock <- socket (addrFamily serveraddr) Datagram defaultProtocol
 >     bindSocket sock (addrAddress serveraddr)

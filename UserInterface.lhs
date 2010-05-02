@@ -17,11 +17,13 @@ This is the main file for the user interface components.
 > import Control.Monad.IO.Class (liftIO)
 > import Control.Monad.Trans.Class (lift)
 > import Control.Monad (filterM)
+> import Control.Concurrent.Chan
 
 > import Utils
 > import qualified TileSet as TS
 > import qualified UserSettings as US
 > import qualified GamePacket as GP
+> import qualified GamePacketListener as GPL
 > import qualified Server as Server
 
 This is the data that will be housed in the state.
@@ -34,7 +36,9 @@ This is the data that will be housed in the state.
 >         uisTileSurfaces :: [TS.ResolutionSurfaces],
 >         uisLoadedRes :: DM.Map String SDL.Surface,
 >         uisCurrentLayout :: UILayout ,
->         uisQuitting :: Bool
+>         uisQuitting :: Bool,
+>         uisGamePacketChan :: Chan GP.GamePacket,
+>         uisPlayerCons :: DM.Map Int GP.ClientConInfo -- key is client ID
 >     } 
 
 This determines the location of the UIWidget.
@@ -104,7 +108,6 @@ All possible main game states.
 >     uiClickLMBH
 
 
-
 > titleScreenLayout :: UILayout
 > titleScreenLayout = UILayout 
 >     [ (UIWidget (FP.joinPath ["art","ui","Background.png"])
@@ -156,10 +159,20 @@ All possible main game states.
 >             MTS.put $ uis { uisCurrentLayout = multiplayerTypeSelectLayout }
 >             return () 
 >         StartHotSeatGame -> do
->             cci <- liftIO $ GP.openServerConnection "localhost" GP.defaultPort
->             let (Just cci', gp) = GP.createNewPacket (Just cci) GP.InitGameReq ""
->             liftIO $ GP.sendPacket cci' gp
+>             cci <- liftIO $ GP.openServerConnection "localhost" GP.defaultPortNum "Player1"
+>             let (Just cci', gp) = GP.createNewPacket (Just cci) 
+>                                                      GP.defaultClientPortNum  
+>                                                      GP.InitGameReq ""
+>             newcci <- liftIO $ GP.sendPacket cci' gp
+>             let newcci2 = GP.registerCallback newcci GP.InitGameResp testCallback
+>             let pcs = uisPlayerCons uis
+>             MTS.put $ uis { uisPlayerCons = DM.insert (GP.cciClientID newcci2) newcci2 pcs }
 >             return ()
+
+> testCallback :: GP.ClientConInfo -> GP.GamePacket -> IO ()
+> testCallback cci gp = do
+>     putStrLn "GOT INITGAMERESP!"
+
 
 > getWidgetsForClick :: UILayout -> Int -> Int -> UIStateIO ([UIWidget])
 > getWidgetsForClick uil x y = do
