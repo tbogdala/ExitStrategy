@@ -41,10 +41,6 @@ is considered the current resolution of art to be used.
 >     }
 
 
-Helper function to codify what the current resolution is.
-
-> currentResolution :: UIState -> ResolutionSurfaces
-> currentResolution ui = head $ uiTerrainSurfaces ui
 
 
 Defines the UIConsole data type which has it's own viewport and

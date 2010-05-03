@@ -27,6 +27,12 @@ Define the current version of the TileSet file format.
 > currentTileSetFileVersion = 0
 
 
+Helper function to codify what the current resolution is.
+
+> currentResolution :: [ResolutionSurfaces] -> ResolutionSurfaces
+> currentResolution = head 
+
+
 Defines a TileSet. This is meant to be a way the user can customize
 the look of the game with new graphics. 
 

@@ -19,12 +19,14 @@ This is the main file for the game executable.
 > import Control.Monad
 
 > import Utils
-> import UserSettings as US
-> import TileSet as TS
-> import UserInterface as UI
-> import Server as Server
-> import GamePacket as GP
-> import GamePacketListener as GPL
+> import qualified UserSettings as US
+> import qualified TileSet as TS
+> import qualified UserInterface as UI
+> import qualified Server as Server
+> import qualified GamePacket as GP
+> import qualified GamePacketListener as GPL
+> import qualified GameMap as GM
+> import qualified UIConsole as UIC
 
 
 > defaultWindowWidth = 800
@@ -34,7 +36,7 @@ This is the main file for the game executable.
 > delayForMaxFPS = quot 1000 60 -- 60 fps target
 
 
-> getUserSettings :: IO UserSettings
+> getUserSettings :: IO US.UserSettings
 > getUserSettings = do
 >     e <- US.readUserSettings
 >     case e of 
@@ -46,7 +48,7 @@ This function loads som of the art resources needed and returns them
 as a giant tuple wrapped in a maybe. If any of these fail to load,
 Nothing will be returnede
 
-> loadResources :: IO (Maybe (SDLt.Font, TS.TileSet, [ResolutionSurfaces]))
+> loadResources :: IO (Maybe (SDLt.Font, TS.TileSet, [TS.ResolutionSurfaces]))
 > loadResources = do
 >   fontM <- SDLt.tryOpenFont gameFontFile 16
 >   case fontM of
@@ -70,7 +72,7 @@ Nothing will be returnede
 >      SDLt.init
 >      SDL.enableUnicode True 
 >      us <- getUserSettings
->      vm <- SDL.trySetVideoMode (US.usWindowWidth us) (usWindowHeight us) 32 
+>      vm <- SDL.trySetVideoMode (US.usWindowWidth us) (US.usWindowHeight us) 32 
 >                                [SDL.HWSurface, SDL.DoubleBuf, SDL.Resizable] 
 >      if isNothing vm
 >        then fail ("Could not set video mode: " ++ (show defaultWindowWidth) ++ 
@@ -82,18 +84,22 @@ Nothing will be returnede
 >          case resM of 
 >            Nothing -> putStrLn "Failed to load resources." >> SDL.quit
 >            Just (font, tileSet, resSurfs) -> do
+>              dummyMap <- GM.makeRandomMap tileSet 30 30
+>              console <- UIC.createUIConsole 0 0 200 font
 >              endState <- MTS.execStateT runGame $
 >                          UI.newUIState us font tileSet resSurfs 
->                                        titleScreenLayout False clientChan
->                                        DM.empty
+>                                        UI.titleScreenLayout False clientChan
+>                                        DM.empty dummyMap
+>                                        console
+
 >              SDL.enableUnicode False
 >              SDL.quit
->              wsE <- writeUserSettings $ UI.uisUserSettings endState
+>              wsE <- US.writeUserSettings $ UI.uisUserSettings endState
 >              case wsE of
 >                Left wsErr -> putStrLn wsErr
 >                Right _ -> putStrLn "done"
 
-> makeClientListener :: Int -> IO (Maybe (Chan GamePacket))
+> makeClientListener :: Int -> IO (Maybe (Chan GP.GamePacket))
 > makeClientListener port = 
 >    (do ch <- GPL.makeListener port
 >        return $ Just ch) `catch`
@@ -110,7 +116,7 @@ Nothing will be returnede
 >   where
 >     eventLoop = do 
 >         uis <- MTS.get
->         if uisQuitting uis
+>         if UI.uisQuitting uis
 >             then return ()
 >             else do sdlEvent <- liftIO $ SDL.pollEvent
 >                     checkEvent sdlEvent
@@ -124,8 +130,8 @@ Nothing will be returnede
 >               checkEvent e
 >           SDL.KeyDown ks -> do
 >               uis <- MTS.get
->               let cl = uisCurrentLayout uis 
->                   clKH = uilKeyHandler cl
+>               let cl = UI.uisCurrentLayout uis 
+>                   clKH = UI.uilKeyHandler cl
 >               clKH ks
 >               eventLoop 
 >           SDL.VideoResize x y -> do
@@ -139,7 +145,7 @@ Nothing will be returnede
 >           SDL.MouseButtonUp x y SDL.ButtonLeft -> do
 >               uis <- MTS.get
 >               let cl = UI.uisCurrentLayout uis
->                   cllmbh = uilLMBHandler cl
+>                   cllmbh = UI.uilLMBHandler cl
 >               cllmbh (fromIntegral x) (fromIntegral y) SDL.ButtonLeft
 >               eventLoop
 >           _ -> eventLoop
@@ -150,7 +156,7 @@ Nothing will be returnede
 >     uis <- MTS.get
 >     mainSurf <- liftIO $ SDL.getVideoSurface
 >     liftIO $ SDL.fillRect mainSurf Nothing $ SDL.Pixel 0
->     UI.drawUserInterface $ uisCurrentLayout uis
+>     UI.drawUserInterface $ UI.uisCurrentLayout uis
 >     liftIO $ SDL.flip mainSurf
 >     return ()
 
@@ -158,7 +164,7 @@ Nothing will be returnede
 > processNetwork :: UI.UIStateIO ()
 > processNetwork = do
 >     uis <- MTS.get
->     let ch = uisGamePacketChan uis
+>     let ch = UI.uisGamePacketChan uis
 >     emptyCh <- liftIO $ isEmptyChan ch
 >     if emptyCh
 >         then return ()
@@ -169,17 +175,17 @@ Nothing will be returnede
 >                  else do checkCallbacks gp
 >                processNetwork
 
-> checkCallbacks :: GamePacket -> UI.UIStateIO ()
+> checkCallbacks :: GP.GamePacket -> UI.UIStateIO ()
 > checkCallbacks gp = do
 >     uis <- MTS.get
->     let pcs = uisPlayerCons uis
+>     let pcs = UI.uisPlayerCons uis
 >     mapM_ (checkClientID gp pcs) $ DM.keys pcs
 >   where
->     checkClientID :: GamePacket -> DM.Map Int ClientConInfo -> Int -> UI.UIStateIO ()
+>     checkClientID :: GP.GamePacket -> DM.Map Int GP.ClientConInfo -> Int -> UI.UIStateIO ()
 >     checkClientID gp pcs id = do
 >         let Just cci = DM.lookup id pcs
->             cbmap = cciCallbacks cci
->             cbsM = DM.lookup (gpCommand gp) cbmap
+>             cbmap = GP.cciCallbacks cci
+>             cbsM = DM.lookup (GP.gpCommand gp) cbmap
 >         if isNothing cbsM 
 >           then return ()
 >           else do
@@ -188,24 +194,24 @@ Nothing will be returnede
 >             liftIO $ putStrLn "DEBUG: callback found."
 >             return ()
 
-> processAck :: GamePacket -> UI.UIStateIO ()
+> processAck :: GP.GamePacket -> UI.UIStateIO ()
 > processAck gp = do
 >     uis <- MTS.get
->     let pcs = uisPlayerCons uis
->         pcIdToAck = (gpClientID gp)
+>     let pcs = UI.uisPlayerCons uis
+>         pcIdToAck = (GP.gpClientID gp)
 >     let pcM = DM.lookup pcIdToAck pcs
 >     if isNothing pcM 
 >       then do liftIO $ putStrLn $ "ACK for unknown clientID: " ++ show pcIdToAck
 >               return ();
 >       else do let pc = fromJust pcM
->                   seqToAck = (gpSeq gp)
->                   needAcks = cciNeedAcks pc
->                   filtered = filter (\p -> if (gpSeq p) == seqToAck then False else True)
+>                   seqToAck = (GP.gpSeq gp)
+>                   needAcks = GP.cciNeedAcks pc
+>                   filtered = filter (\p -> if (GP.gpSeq p) == seqToAck then False else True)
 >                                     needAcks
 >               liftIO $ putStrLn $ "Processing ack for client id (" ++ show pcIdToAck ++
 >                              ") seq (" ++ show seqToAck ++ ")"
->               let pc' = pc { cciNeedAcks = filtered }
->               MTS.put $ uis { uisPlayerCons = DM.insert pcIdToAck pc' pcs }
+>               let pc' = pc { GP.cciNeedAcks = filtered }
+>               MTS.put $ uis { UI.uisPlayerCons = DM.insert pcIdToAck pc' pcs }
 
      
   

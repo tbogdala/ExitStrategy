@@ -20,11 +20,14 @@ This is the main file for the user interface components.
 > import Control.Concurrent.Chan
 
 > import Utils
+> import UITypes
 > import qualified TileSet as TS
 > import qualified UserSettings as US
 > import qualified GamePacket as GP
 > import qualified GamePacketListener as GPL
 > import qualified Server as Server
+> import qualified GameMap as GM
+> import qualified UIConsole as UIC
 
 This is the data that will be housed in the state.
 
@@ -38,7 +41,9 @@ This is the data that will be housed in the state.
 >         uisCurrentLayout :: UILayout ,
 >         uisQuitting :: Bool,
 >         uisGamePacketChan :: Chan GP.GamePacket,
->         uisPlayerCons :: DM.Map Int GP.ClientConInfo -- key is client ID
+>         uisPlayerCons :: DM.Map Int GP.ClientConInfo, -- key is client ID
+>         uisGameMap :: GM.GameMap,
+>         uisConsole :: UIConsole
 >     } 
 
 This determines the location of the UIWidget.
@@ -50,15 +55,22 @@ with the supplied modifications to the center x,y point.
 
 > data UILayoutPosition = Exact Int Int          -- x,y
 >                         | CenterScreen Int Int -- xmod ymod
+>                         | BottomLeftPct Int Int Int Int -- bufferX bufferY W% H%
 >   deriving (Eq, Show)
 
 
 > data UIWidget = UIWidget {
+>                     uiwSpecial :: UISpecialWidget,
 >                     uiwImageFilePath :: String,
 >                     uiwPosition :: UILayoutPosition,
 >                     uiwZOrder :: Int,
 >                     uiwActions :: [UIAction]
 >                 } deriving (Eq, Show)
+
+> data UISpecialWidget = NotSpecial
+>                      | GameMap
+>                      | Console
+>    deriving (Eq, Show)
 
 > data UILayout = UILayout 
 >     {
@@ -79,6 +91,55 @@ All possible main game states.
 >                | StartHotSeatGame
 >     deriving (Eq, Show)
 
+> gameLayout :: UILayout
+> gameLayout = UILayout
+>     [ (UIWidget GameMap
+>                 []
+>                 (CenterScreen 0 0)
+>                 0 [])
+>     , (UIWidget Console
+>                 []
+>                 (BottomLeftPct 10 10 25 50)
+>                 10 [])
+>     ]
+>     consoleKeyHandler
+>     uiClickLMBH
+
+> multiplayerTypeSelectLayout :: UILayout
+> multiplayerTypeSelectLayout = UILayout
+>     [ (UIWidget NotSpecial (FP.joinPath ["art","ui","Background.png"])
+>                 (CenterScreen 0 0)
+>                 0 [])
+>     , (UIWidget NotSpecial (FP.joinPath ["art","ui","HotSeat.png"])
+>                 (CenterScreen 0 (-50))
+>                 10 [SwitchGameState StartHotSeatGame])
+>     , (UIWidget NotSpecial (FP.joinPath ["art","ui","Back.png"])
+>                 (CenterScreen 0 75)
+>                 11 [SwitchGameState TitleScreen])
+>     ]
+>     uiDefaultKH
+>     uiClickLMBH
+
+> titleScreenLayout :: UILayout
+> titleScreenLayout = UILayout 
+>     [ (UIWidget NotSpecial (FP.joinPath ["art","ui","Background.png"])
+>                 (CenterScreen 0 0)
+>                 0 [])
+>     , (UIWidget NotSpecial (FP.joinPath ["art","ui","MainLogo.png"])
+>                 (CenterScreen 0 (-150))
+>                 11 [])
+>     , (UIWidget NotSpecial (FP.joinPath ["art","ui","SinglePlayer.png"])
+>                 (CenterScreen 0 (-50))
+>                 12 [])
+>     , (UIWidget NotSpecial (FP.joinPath ["art","ui","MultiPlayer.png"])
+>                 (CenterScreen 0 0)
+>                 13 [SwitchGameState MultiplayerTypeSelect])
+>     , (UIWidget NotSpecial (FP.joinPath ["art","ui","ExitGame.png"])
+>                 (CenterScreen 0 100)
+>                 14 [ExitGame])
+>     ]
+>     uiDefaultKH
+>     uiClickLMBH
 
 
 > uiDefaultKH :: SDL.Keysym -> UIStateIO ()
@@ -91,42 +152,44 @@ All possible main game states.
 >     return ()
 
 
+This is the keyboard handler used when the UIConsole is being displayed.
+Most keys are passed in to the UIConsole as input. RETURN processes 
+the command. The ` (backquote) key opens and closes the console.
 
-> multiplayerTypeSelectLayout :: UILayout
-> multiplayerTypeSelectLayout = UILayout
->     [ (UIWidget (FP.joinPath ["art","ui","Background.png"])
->                 (CenterScreen 0 0)
->                 0 [])
->     , (UIWidget (FP.joinPath ["art","ui","HotSeat.png"])
->                 (CenterScreen 0 (-50))
->                 10 [SwitchGameState StartHotSeatGame])
->     , (UIWidget (FP.joinPath ["art","ui","Back.png"])
->                 (CenterScreen 0 75)
->                 11 [SwitchGameState TitleScreen])
->     ]
->     uiDefaultKH
->     uiClickLMBH
+> consoleKeyHandler :: SDL.Keysym -> UIStateIO ()
+> consoleKeyHandler (SDL.Keysym ks _ key) = do
+>     uis <- MTS.get
+>     case ks of
+>       SDL.SDLK_RETURN -> do
+>           processCurrentLine
+>       SDL.SDLK_BACKSPACE -> do
+>           let c' = UIC.removeLastChar (uisConsole uis)
+>           MTS.put $ uis { uisConsole = c' }
+>       _ -> do
+>           let c' = UIC.addCharToConsole (uisConsole uis) key
+>           MTS.put $ uis { uisConsole = c' }
 
-> titleScreenLayout :: UILayout
-> titleScreenLayout = UILayout 
->     [ (UIWidget (FP.joinPath ["art","ui","Background.png"])
->                 (CenterScreen 0 0)
->                 0 [])
->     , (UIWidget (FP.joinPath ["art","ui","MainLogo.png"])
->                 (CenterScreen 0 (-150))
->                 11 [])
->     , (UIWidget (FP.joinPath ["art","ui","SinglePlayer.png"])
->                 (CenterScreen 0 (-50))
->                 12 [])
->     , (UIWidget (FP.joinPath ["art","ui","MultiPlayer.png"])
->                 (CenterScreen 0 0)
->                 13 [SwitchGameState MultiplayerTypeSelect])
->     , (UIWidget (FP.joinPath ["art","ui","ExitGame.png"])
->                 (CenterScreen 0 100)
->                 14 [ExitGame])
->     ]
->     uiDefaultKH
->     uiClickLMBH
+
+Takes the cCurrentLine text string and 'executes' it as a command.
+Adds the command string to the log.
+
+> processCurrentLine :: UIStateIO ()
+> processCurrentLine = do
+>     uis <- MTS.get 
+>     let console = uisConsole uis
+>         commandWords = words (cCurrentLine console)
+>         newLog = [cCurrentLine console] ++ (cTextLog console)
+>         newConsole = console { cCurrentLine = "", cTextLog = newLog }
+>     MTS.put $ uis { uisConsole = newConsole }
+>     runCommand commandWords
+
+> runCommand :: [String] -> UIStateIO ()
+> runCommand (":quit" : args) = do
+>     uis <- MTS.get
+>     let c' = UIC.addLineToLog "Quitting game!" $ uisConsole uis
+>     MTS.put $ uis { uisConsole = c', uisQuitting = True }
+
+
 
 
 > uiClickLMBH :: Int -> Int -> SDL.MouseButton -> UIStateIO ()
@@ -165,7 +228,8 @@ All possible main game states.
 >             newcci <- liftIO $ GP.sendPacket cci' gp
 >             let newcci2 = GP.registerCallback newcci GP.InitGameResp testCallback
 >             let pcs = uisPlayerCons uis
->             MTS.put $ uis { uisPlayerCons = DM.insert (GP.cciClientID newcci2) newcci2 pcs }
+>             MTS.put $ uis { uisPlayerCons = DM.insert (GP.cciClientID newcci2) newcci2 pcs,
+>                             uisCurrentLayout = gameLayout  }
 >             return ()
 
 > testCallback :: GP.ClientConInfo -> GP.GamePacket -> IO ()
@@ -180,7 +244,9 @@ All possible main game states.
 >     hits <- filterM (isCoordInsideWidget mainSurf x y) widgets
 >     return hits
 >   where
->     isCoordInsideWidget mainSurf x y (UIWidget fp pos _ _) = do
+>     isCoordInsideWidget mainSurf x y (UIWidget special fp pos _ _) = do
+>       case special of 
+>        NotSpecial -> do
 >         wSurfM <- getUIResource fp
 >         case wSurfM of 
 >             Nothing -> return False
@@ -189,6 +255,14 @@ All possible main game states.
 >               if wx <= x && x <= (wx+ww) && wy <= y && y <= (wy+wh)
 >                 then return True
 >                 else return False
+>        GameMap -> return True
+>        Console -> do
+>         uis <- MTS.get
+>         let c = cViewPort $ uisConsole uis
+>         if (SDL.rectX c) <= x && x <= (SDL.rectX c) + (SDL.rectW c) &&
+>            (SDL.rectY c) <= y && y <= (SDL.rectY c) + (SDL.rectH c)
+>            then return True
+>            else return False
 
 
 Draws all user interface components listed in the UILayout in
@@ -213,7 +287,13 @@ Returns the list of widgets for a layout ordered by ZOrder.
 Performs the actual blitting onto the surface.
 
 > drawWidget :: SDL.Surface -> UIWidget -> UIStateIO (Either String () )
-> drawWidget mainSurf (UIWidget fp pos _ _) = do
+> drawWidget mainSurf w@(UIWidget special fp pos _ _) = do
+>   case special of
+>     NotSpecial -> basicDraw mainSurf special fp pos
+>     GameMap -> drawTheGameMap mainSurf
+>     Console -> drawTheConsole mainSurf pos
+>  where
+>   basicDraw mainSurf special fp pos = do
 >     btnSurfM <- getUIResource fp
 >     case btnSurfM of 
 >         Nothing -> return $ Left $ "drawWidget couldn't find " ++ fp
@@ -221,22 +301,48 @@ Performs the actual blitting onto the surface.
 >             dr <- getPositionRect mainSurf bs pos                 
 >             liftIO $ SDL.blitSurface bs Nothing mainSurf $ Just dr
 >             return $ Right ()
-
+>   drawTheGameMap mainSurf = do
+>     uis <- MTS.get
+>     let gm = uisGameMap uis
+>         coords = mapCoordinates ((GM.gmWidth gm), (GM.gmHeight gm))
+>         resSurfs = TS.currentResolution $ uisTileSurfaces uis
+>         (mw, mh) = getSurfaceWH mainSurf
+>     liftIO $ GM.drawGameMap gm  (SDL.Rect 0 0 mw mh) mainSurf resSurfs coords
+>     return $ Right ()
+>   drawTheConsole mainSurf pos = do
+>     uis <- MTS.get 
+>     let c = uisConsole uis
+>     posRect <- getPositionRect mainSurf (cSurface c) pos
+>     let c' = c { cViewPort = posRect }
+>     maybeNewConsole <- liftIO $ UIC.updateSurface  c' posRect
+>     if isNothing maybeNewConsole
+>       then MTS.put $ uis { uisConsole = c' }
+>       else MTS.put $ uis { uisConsole = (fromJust maybeNewConsole) }
+>     liftIO $ UIC.drawConsole mainSurf c'
+>     return $ Right ()
 
 Gets a rectangle for the widget's position on screen. 
 All fields of the SDL.Rect are populated.
 
 > getPositionRect :: SDL.Surface -> SDL.Surface -> UILayoutPosition -> UIStateIO (SDL.Rect)
 > getPositionRect mainSurf widgetSurf pos = do
->     let (wdgW,wdgH) = getSurfaceWH widgetSurf
 >     case pos of
 >         CenterScreen rx ry -> let (msW,msH) = getSurfaceWH mainSurf
+>                                   (wdgW,wdgH) = getSurfaceWH widgetSurf
 >                                   cx = (quot msW 2) + rx
 >                                   cy = (quot msH 2) + ry
 >                                   wx = cx - (quot wdgW 2)
 >                                   wy = cy - (quot wdgH 2)
 >                               in return $ SDL.Rect wx wy wdgW wdgH
->         Exact x y -> return $ SDL.Rect x y wdgW wdgH 
+>         Exact x y -> let (wdgW,wdgH) = getSurfaceWH widgetSurf
+>                      in return $ SDL.Rect x y wdgW wdgH 
+>         BottomLeftPct xbuff ybuff pctH pctW -> 
+>             let (msW,msH) = getSurfaceWH mainSurf
+>                 pH = round $ (toRational msH / 100 * toRational pctH)
+>                 pW = round $ (toRational msW / 100 * toRational pctW)
+>                 bpX = xbuff
+>                 bpY = msH - pH - ybuff
+>             in return $ SDL.Rect bpX bpY pW pH
 
 Defines a type using the StateT monad transformer and
 the UserInterfaceState struct above to keep track of state.

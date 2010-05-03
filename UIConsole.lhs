@@ -28,10 +28,16 @@ The height of the console is hardcoded to 200 pixels at the moment.
 > createUIConsole :: Int ->  Int -> Int -> SDLt.Font -> IO UIConsole
 > createUIConsole x y w f = do
 >     let h = 200
+>     s' <- createConsoleSurface w h
+>     return $ UIConsole (SDL.Rect x y w h) s' f [] ""
+
+> createConsoleSurface :: Int -> Int -> IO SDL.Surface
+> createConsoleSurface w h = do
 >     s <- SDL.createRGBSurface [SDL.SrcAlpha] w h  32 0 0 0 0
 >     s' <- SDL.displayFormat s
 >     SDL.freeSurface s
->     return $ UIConsole (SDL.Rect x y w h) s' f [] ""
+>     return s'
+
 
 
 Adds the character to the log. Does basic filtering to only allow
@@ -56,18 +62,6 @@ Simple function to remove the last character of the text log.
 >        oldText = (cCurrentLine c)
 >        newText = take ((length oldText) - 1) oldText
 
-
-Takes the cCurrentLine text string and 'executes' it as a command.
-Adds the command string to the log.
-
-> processCurrentLine :: UIState -> IO UIState
-> processCurrentLine ui = newUIState
->     where
->        console = uiConsole ui
->        commandWords = words (cCurrentLine console)
->        newLog = [cCurrentLine console] ++ (cTextLog console)
->        newConsole = console { cCurrentLine = "", cTextLog = newLog }
->        newUIState = runCommand commandWords $ ui { uiConsole = newConsole }
 
 
 Simple defaults for the drawing functions.
@@ -115,70 +109,23 @@ SDL-ttf is used to generate the text surfaces.
 >             return $ Just t
 
 
+> updateSurface :: UIConsole -> SDL.Rect -> IO (Maybe UIConsole)
+> updateSurface c r = do
+>     let prevSurf = cSurface c
+>         (pW, pH) = getSurfaceWH prevSurf
+>         nW = SDL.rectW r
+>         nH = SDL.rectH r
+>     if nW == pW || nH == pH
+>        then return Nothing
+>        else do
+>          newSurf <- createConsoleSurface nW nH
+>          return $ Just $ c { cSurface = newSurf }
+
+
+
+
 Adds an entire string to the text log of the console.
 
-> addLineToLog :: String -> UIState -> UIState
-> addLineToLog s ui = ui { uiConsole = newConsole}
->     where c = (uiConsole ui)
->           newConsole = c { cTextLog = [s] ++ (cTextLog c) }
-
-
-
-These series of commands process the UIConsole 'commands'. Given a [String],
-which is just a command string broken up into words, it potentially transforms
-a given UIState to a new UIState. 
-
-Some actions may perform IO actions, so the return type is IO UIState.
-
-> runCommand :: [String] -> UIState -> IO UIState
-> runCommand (":test" : args) ui = do
->     return $ addLineToLog "Test Successful!" ui
-
-
-Extends or shrinks the current map. The TileSet's default MapTile
-is used if the map dimensions are expanded.
-
-> runCommand (":mapsize" : sW : sH : args) ui = do
->         let w = read sW :: Int
->             h = read sH :: Int
->             oldMap = uiTerrainMap ui
->             newMap = oldMap { gmHeight = h,
->                               gmWidth = w,
->                               gmLocations =  DMap.union cutdownMap defaultMap }
->             defaultMap = foldr makeDefault DMap.empty (mapCoordinates (w,h))
->             cutdownMap = DMap.filterWithKey 
->                 (\(x,y) _ -> if (x<=w)&&(y<=h) then True else False)
->                 (gmLocations oldMap)
->             makeDefault coord m =
->                 DMap.insert coord (GameMapLoc $ tsDefaultTileName $ uiTileSet ui) m
->         return ui { uiTerrainMap = newMap }
-
-
-Generates a new map entirely randomized with the width and height specified.
-
-> runCommand (":randomize" : sW :sH : args) ui = do
->         let w = read sW :: Int
->         let h = read sH :: Int
->         newMap <- makeRandomMap (uiTileSet ui) w h
->         return $ ui { uiTerrainMap = newMap }
-
-
-Saves the current map to a file.
-
-> runCommand (":savemap" : mapName : args) ui = do
->     writeMapToFile  mapName $ uiTerrainMap ui
->     return $ addLineToLog "saved map to file." ui
-
-
-Loads a map from a file.
-
-> runCommand (":loadmap" : mapName : args) ui = do
->     maybeMap <- readMapFromFile mapName 
->     case maybeMap of
->         Just m -> return $ addLineToLog "loaded map." $ ui { uiTerrainMap = m }
->         Nothing -> return $ addLineToLog "failed to load map file!" ui
-
-
-The default implementation does nothing.
- 
-> runCommand (cmd : args) ui = do return ui
+> addLineToLog :: String -> UIConsole -> UIConsole
+> addLineToLog s c = 
+>    c { cTextLog = [s] ++ (cTextLog c) }
