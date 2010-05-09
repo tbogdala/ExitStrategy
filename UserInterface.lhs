@@ -24,7 +24,6 @@ This is the main file for the user interface components.
 > import qualified TileSet as TS
 > import qualified UserSettings as US
 > import qualified GamePacket as GP
-> import qualified GamePacketListener as GPL
 > import qualified Server as Server
 > import qualified GameMap as GM
 > import qualified UIConsole as UIC
@@ -40,7 +39,6 @@ This is the data that will be housed in the state.
 >         uisLoadedRes :: DM.Map String SDL.Surface,
 >         uisCurrentLayout :: UILayout ,
 >         uisQuitting :: Bool,
->         uisGamePacketChan :: Chan GP.GamePacket,
 >         uisPlayerCons :: DM.Map Int GP.ClientConInfo, -- key is client ID
 >         uisGameMap :: GM.GameMap,
 >         uisConsole :: UIConsole
@@ -222,19 +220,18 @@ Adds the command string to the log.
 >             return () 
 >         StartHotSeatGame -> do
 >             cci <- liftIO $ GP.openServerConnection "localhost" GP.defaultPortNum "Player1"
->             let (Just cci', gp) = GP.createNewPacket (Just cci) 
->                                                      GP.defaultClientPortNum  
->                                                      GP.InitGameReq ""
->             newcci <- liftIO $ GP.sendPacket cci' gp
->             let newcci2 = GP.registerCallback newcci GP.InitGameResp testCallback
+>             let gp = GP.createNewPacket GP.InitGameReq ""
+>             let cci' = GP.registerCallback cci GP.InitGameResp testCallback
+>             liftIO $ GP.sendPacket cci' gp
 >             let pcs = uisPlayerCons uis
->             MTS.put $ uis { uisPlayerCons = DM.insert (GP.cciClientID newcci2) newcci2 pcs,
+>             MTS.put $ uis { uisPlayerCons = DM.insert 0 cci' pcs,
 >                             uisCurrentLayout = gameLayout  }
 >             return ()
 
 > testCallback :: GP.ClientConInfo -> GP.GamePacket -> IO ()
 > testCallback cci gp = do
->     putStrLn "GOT INITGAMERESP!"
+>     putStrLn "GOT INITGAMERESP!" 
+
 
 
 > getWidgetsForClick :: UILayout -> Int -> Int -> UIStateIO ([UIWidget])

@@ -24,7 +24,6 @@ This is the main file for the game executable.
 > import qualified UserInterface as UI
 > import qualified Server as Server
 > import qualified GamePacket as GP
-> import qualified GamePacketListener as GPL
 > import qualified GameMap as GM
 > import qualified UIConsole as UIC
 
@@ -67,7 +66,6 @@ Nothing will be returnede
 > main :: IO ()
 > main = do 
 >      CC.forkIO (Server.gameServer GP.defaultPortNum)
->      Just clientChan <- makeClientListener GP.defaultClientPortNum
 >      SDL.init [SDL.InitEverything]
 >      SDLt.init
 >      SDL.enableUnicode True 
@@ -88,7 +86,7 @@ Nothing will be returnede
 >              console <- UIC.createUIConsole 0 0 200 font
 >              endState <- MTS.execStateT runGame $
 >                          UI.newUIState us font tileSet resSurfs 
->                                        UI.titleScreenLayout False clientChan
+>                                        UI.titleScreenLayout False 
 >                                        DM.empty dummyMap
 >                                        console
 
@@ -98,14 +96,6 @@ Nothing will be returnede
 >              case wsE of
 >                Left wsErr -> putStrLn wsErr
 >                Right _ -> putStrLn "done"
-
-> makeClientListener :: Int -> IO (Maybe (Chan GP.GamePacket))
-> makeClientListener port = 
->    (do ch <- GPL.makeListener port
->        return $ Just ch) `catch`
->    (\e -> do putStrLn $ "Failed to make network listing socket! : " ++ show e
->              return Nothing)
-
 
 
 > runGame :: UI.UIStateIO ()
@@ -118,16 +108,16 @@ Nothing will be returnede
 >         uis <- MTS.get
 >         if UI.uisQuitting uis
 >             then return ()
->             else do sdlEvent <- liftIO $ SDL.pollEvent
+>             else do processNetwork
+>                     sdlEvent <- liftIO $ SDL.pollEvent
 >                     checkEvent sdlEvent
->                     processNetwork
+>                     
 >     checkEvent e = do
 >         case e of
 >           SDL.NoEvent -> do
 >               drawScreen 
 >               liftIO $ SDL.delay delayForMaxFPS
->               e <- liftIO $ SDL.pollEvent
->               checkEvent e
+>               eventLoop
 >           SDL.KeyDown ks -> do
 >               uis <- MTS.get
 >               let cl = UI.uisCurrentLayout uis 
@@ -164,54 +154,31 @@ Nothing will be returnede
 > processNetwork :: UI.UIStateIO ()
 > processNetwork = do
 >     uis <- MTS.get
->     let ch = UI.uisGamePacketChan uis
->     emptyCh <- liftIO $ isEmptyChan ch
->     if emptyCh
->         then return ()
->         else do 
->                gp <- liftIO $ readChan ch
->                if (GP.gpCommand gp) == GP.ACK 
->                  then do processAck gp
->                  else do checkCallbacks gp
->                processNetwork
+>     let clients = DM.elems (UI.uisPlayerCons uis)
+>     mapM_ checkClient clients
+>  where
+>    checkClient :: GP.ClientConInfo -> UI.UIStateIO ()
+>    checkClient cci = do
+>      packet <- liftIO $ GP.readPacket cci
+>      if(isJust packet) 
+>        then checkCallbacks cci $ fromJust packet
+>        else return ()
 
-> checkCallbacks :: GP.GamePacket -> UI.UIStateIO ()
-> checkCallbacks gp = do
->     uis <- MTS.get
->     let pcs = UI.uisPlayerCons uis
->     mapM_ (checkClientID gp pcs) $ DM.keys pcs
->   where
->     checkClientID :: GP.GamePacket -> DM.Map Int GP.ClientConInfo -> Int -> UI.UIStateIO ()
->     checkClientID gp pcs id = do
->         let Just cci = DM.lookup id pcs
->             cbmap = GP.cciCallbacks cci
->             cbsM = DM.lookup (GP.gpCommand gp) cbmap
->         if isNothing cbsM 
->           then return ()
->           else do
->             let cbs = fromJust cbsM
->             mapM_ (\cb -> liftIO $ cb cci gp) cbs
->             liftIO $ putStrLn "DEBUG: callback found."
->             return ()
 
-> processAck :: GP.GamePacket -> UI.UIStateIO ()
-> processAck gp = do
->     uis <- MTS.get
->     let pcs = UI.uisPlayerCons uis
->         pcIdToAck = (GP.gpClientID gp)
->     let pcM = DM.lookup pcIdToAck pcs
->     if isNothing pcM 
->       then do liftIO $ putStrLn $ "ACK for unknown clientID: " ++ show pcIdToAck
->               return ();
->       else do let pc = fromJust pcM
->                   seqToAck = (GP.gpSeq gp)
->                   needAcks = GP.cciNeedAcks pc
->                   filtered = filter (\p -> if (GP.gpSeq p) == seqToAck then False else True)
->                                     needAcks
->               liftIO $ putStrLn $ "Processing ack for client id (" ++ show pcIdToAck ++
->                              ") seq (" ++ show seqToAck ++ ")"
->               let pc' = pc { GP.cciNeedAcks = filtered }
->               MTS.put $ uis { UI.uisPlayerCons = DM.insert pcIdToAck pc' pcs }
+
+> checkCallbacks :: GP.ClientConInfo -> GP.GamePacket -> UI.UIStateIO ()
+> checkCallbacks cci gp = do
+>     let cbmap = GP.cciCallbacks cci
+>         cbsM = DM.lookup (GP.gpCommand gp) cbmap
+>     if isNothing cbsM 
+>       then return ()
+>       else do
+>         let cbs = fromJust cbsM
+>         mapM_ (\cb -> liftIO $ cb cci gp) cbs
+>         liftIO $ putStrLn "DEBUG: callback found."
+>         return ()
+
+
 
      
   

@@ -4,18 +4,8 @@ Exit Strategy version history
 =====
 
 * FIXME: netbook's immediate maximise doesn't trigger a video resize.
-* TODO: mulitplayerSelectLayout needs a back button. PLAYER 1-8 buttons for multi
-<<<<<<< HEAD
-* TODO: server packets are not ack'd by clients.
 
-
-
-=======
-
-
-
-
->>>>>>> 346f849444c149739c35676408e5eac19e5161ec
+* Basic TCP networking in place.
 * Added units to the tile set.
 * Implemented UI Actions and basics of a game state. UILayouts also
   have their own input handler callbacks.

@@ -7,7 +7,7 @@ A module of helper function common to multiple places in the project.
 
 > import Data.Map (Map)
 > import qualified Graphics.UI.SDL as SDL
-
+> import Control.Concurrent.STM (readTVar, writeTVar, TVar, STM)
 
 Defines the application name to be used.
 
@@ -19,6 +19,13 @@ A monadic lookup function ripped from Magnus's post:
 http://therning.org/magnus/archives/719
 
 > lookupM a as = maybe (fail $ "No such element: " ++ a) return (lookup a as)
+
+
+Pulled from Real World Haskell chapter 28.
+
+> modifyTVar_ :: TVar a -> (a -> a) -> STM ()
+> modifyTVar_ tv f = readTVar tv >>= writeTVar tv . f
+
 
 
 Helpful type aliases.

@@ -10,9 +10,9 @@ player to Server.
 > import Data.List (genericDrop)
 > import Data.Maybe
 > import Network.Socket
-> import Network.BSD
 > import Text.JSON
 > import qualified Data.Map as DM
+> import System.IO
 
 > import Utils
 
@@ -23,12 +23,9 @@ player to Server.
 
 > data ClientConInfo = ClientConInfo
 >     {
->         cciSocket :: Socket,
+>         cciSocket :: Handle,
 >         cciAddress :: SockAddr,
 >         cciClientName :: String,
->         cciClientID :: Int,
->         cciLastSeq :: Int,
->         cciNeedAcks :: [GamePacket],
 >         cciCallbacks :: DM.Map PacketCommand [PacketCallback]
 >     } 
 
@@ -37,16 +34,11 @@ player to Server.
 
 > data GamePacket = GamePacket
 >     {
->         gpSockAddr :: Maybe SockAddr,
->         gpReturnPort :: Int,  
->         gpClientID :: Int,
->         gpSeq :: Int,
 >         gpCommand :: PacketCommand,
 >         gpJSONData :: String
 >     } deriving (Eq, Show)
 
-> data PacketCommand = ACK
->                    | InitGameReq
+> data PacketCommand = InitGameReq
 >                    | InitGameResp
 >                    | RequestAsPlayer
 >                    | SetOptions
@@ -70,50 +62,48 @@ player to Server.
 
 
 
-> createNewPacket :: Maybe ClientConInfo -> Int -> PacketCommand -> String ->
->                         (Maybe ClientConInfo, GamePacket)
-> createNewPacket cciM returnPort pc json = 
->     let lastSeq = if isNothing cciM then (-1) else cciLastSeq cci
->         newCCI = if isNothing cciM then Nothing else Just $ cci { cciLastSeq = lastSeq + 1 }
->         cci = fromJust cciM
->         clientId = if isNothing cciM then 0 else cciClientID cci
->         gp = GamePacket Nothing returnPort clientId (lastSeq+1) pc json
->     in (newCCI, gp)
+> createNewPacket :: PacketCommand -> String -> GamePacket
+> createNewPacket pc json = GamePacket pc json
 
 
- createNewCCI :: ClientConInfo
- createNewCCI = ClientConInfo Nothing Nothing [] (-1) (-1)
 
-Actual networking is disabled for now.
 
 > openServerConnection :: HostName -> Int -> String -> IO ClientConInfo
 > openServerConnection hostname port playerName = do
 >     addrinfos <- getAddrInfo Nothing (Just hostname) (Just $ show port)
 >     let serveraddr = head addrinfos
->     sock <- socket (addrFamily serveraddr) Datagram defaultProtocol
+>     sock <- socket (addrFamily serveraddr) Stream defaultProtocol
 >     connect sock (addrAddress serveraddr)
->     return $ ClientConInfo sock (addrAddress serveraddr) 
->                  playerName 0 0 [] DM.empty
+>     h <- socketToHandle sock ReadWriteMode
+>     hSetBuffering h LineBuffering
+>     return $ ClientConInfo h (addrAddress serveraddr) playerName DM.empty
 
 
 
-> sendPacket :: ClientConInfo -> GamePacket -> IO ClientConInfo
+> sendPacket :: ClientConInfo -> GamePacket -> IO ()
 > sendPacket cci gp = do
->     sendAnonyPacket (cciSocket cci) (cciAddress cci) gp
->     let ackls = cciNeedAcks cci
->     return $ cci { cciNeedAcks = [gp] ++ ackls }
-
-
-> sendAnonyPacket :: Socket -> SockAddr -> GamePacket -> IO ()
-> sendAnonyPacket sock sockaddr gp = do
 >     let gpJSON = encode gp
->     sendString gpJSON
->   where
->     sendString :: String -> IO ()
->     sendString [] = return ()
->     sendString remainingMsg = do
->         sent <- sendTo sock remainingMsg sockaddr
->         sendString (genericDrop sent remainingMsg)
+>     hPutStrLn (cciSocket cci) gpJSON
+>     putStrLn $ "SENT: " ++ gpJSON
+
+
+> readPacket :: ClientConInfo -> IO (Maybe GamePacket)
+> readPacket cci = do
+>     let h = cciSocket cci
+>     incomingMsg <- hReady h
+>     if incomingMsg 
+>       then readMsg h
+>       else return Nothing
+>  where
+>   readMsg h = do
+>     msg <- hGetLine h
+>     putStrLn $ "GP: got msg: " ++ msg
+>     let egp = getPacketFromMsg msg
+>     case egp of
+>         Left err -> (putStrLn $ "ERROR (Server/ct): Error getting packet! " 
+>                        ++ err) >> return Nothing
+>         Right gp -> return $ Just gp
+
 
 
 > getPacketFromMsg :: String -> Either String GamePacket
@@ -153,18 +143,12 @@ initialized to Nothing.
 
 > instance JSON GamePacket where
 >    showJSON gp = makeObj
->        [ ("ReturnPort", showJSON $ gpReturnPort gp)
->        , ("ClientID", showJSON $ gpClientID gp)
->        , ("Seq", showJSON $ gpSeq gp)
->        , ("Command", showJSON $ gpCommand gp)
+>        [ ("Command", showJSON $ gpCommand gp)
 >        , ("JSONData", showJSON $ gpJSONData gp)
 >        ]
 >
 >    readJSON (JSObject obj) = do
 >        let objA = fromJSObject obj
->        rtp <- lookupM "ReturnPort" objA >>= readJSON
->        cid <- lookupM "ClientID" objA >>= readJSON
->        seq <- lookupM "Seq" objA >>= readJSON
 >        com <- lookupM "Command" objA >>= readJSON
 >        dat <- lookupM "JSONData" objA >>= readJSON
->        return $ GamePacket Nothing rtp cid seq com dat
+>        return $ GamePacket  com dat
