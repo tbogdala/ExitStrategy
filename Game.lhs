@@ -65,7 +65,6 @@ Nothing will be returnede
 
 > main :: IO ()
 > main = do 
->      CC.forkIO (Server.gameServer GP.defaultPortNum)
 >      SDL.init [SDL.InitEverything]
 >      SDLt.init
 >      SDL.enableUnicode True 
@@ -82,12 +81,13 @@ Nothing will be returnede
 >          case resM of 
 >            Nothing -> putStrLn "Failed to load resources." >> SDL.quit
 >            Just (font, tileSet, resSurfs) -> do
+>              CC.forkIO (Server.gameServer GP.defaultPortNum tileSet)
 >              dummyMap <- GM.makeRandomMap tileSet 30 30
 >              console <- UIC.createUIConsole 0 0 200 font
 >              endState <- MTS.execStateT runGame $
 >                          UI.newUIState us font tileSet resSurfs 
 >                                        UI.titleScreenLayout False 
->                                        DM.empty dummyMap
+>                                        [] dummyMap
 >                                        console
 
 >              SDL.enableUnicode False
@@ -154,27 +154,28 @@ Nothing will be returnede
 > processNetwork :: UI.UIStateIO ()
 > processNetwork = do
 >     uis <- MTS.get
->     let clients = DM.elems (UI.uisPlayerCons uis)
+>     let clients = UI.uisPlayers uis
 >     mapM_ checkClient clients
 >  where
->    checkClient :: GP.ClientConInfo -> UI.UIStateIO ()
->    checkClient cci = do
+>    checkClient :: UI.NetworkedPlayer -> UI.UIStateIO ()
+>    checkClient np = do
+>      let cci = UI.npClientConInfo np
 >      packet <- liftIO $ GP.readPacket cci
 >      if(isJust packet) 
->        then checkCallbacks cci $ fromJust packet
+>        then checkCallbacks np $ fromJust packet
 >        else return ()
 
 
 
-> checkCallbacks :: GP.ClientConInfo -> GP.GamePacket -> UI.UIStateIO ()
-> checkCallbacks cci gp = do
->     let cbmap = GP.cciCallbacks cci
+> checkCallbacks :: UI.NetworkedPlayer -> GP.GamePacket -> UI.UIStateIO ()
+> checkCallbacks np gp = do
+>     let cbmap = UI.npNetCallbacks np
 >         cbsM = DM.lookup (GP.gpCommand gp) cbmap
 >     if isNothing cbsM 
 >       then return ()
 >       else do
 >         let cbs = fromJust cbsM
->         mapM_ (\cb -> liftIO $ cb cci gp) cbs
+>         mapM_ (\cb -> cb np gp) cbs
 >         liftIO $ putStrLn "DEBUG: callback found."
 >         return ()
 

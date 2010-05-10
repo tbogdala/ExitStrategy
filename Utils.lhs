@@ -27,6 +27,12 @@ Pulled from Real World Haskell chapter 28.
 > modifyTVar_ tv f = readTVar tv >>= writeTVar tv . f
 
 
+> maybeReadInt :: String -> Maybe Int
+> maybeReadInt s = 
+>    case reads s of
+>        [(i, _)] -> Just i
+>        _ -> Nothing
+
 
 Helpful type aliases.
 

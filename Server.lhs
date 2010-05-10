@@ -16,9 +16,12 @@ for both player vs AI and player vs player.
 > import Control.Monad.Trans.Class (lift)
 > import qualified Data.Map as DM
 > import qualified Control.Monad.Trans.State.Lazy as MTS
+> import qualified Text.JSON as TJ
 
 > import Utils
 > import qualified GamePacket as GP
+> import qualified GameMap as GM
+> import qualified TileSet as TS
 
 
 > type ServerStateIO a = MTS.StateT GameData IO a
@@ -27,7 +30,9 @@ for both player vs AI and player vs player.
 >     {
 >         gdIncPacketsTChan :: IncGamePacketChan,
 >         gdPlayers :: ClientMap,
->         gdGameState :: GameState
+>         gdGameState :: GameState,
+>         gdTileSet :: TS.TileSet,
+>         gdGameMap :: GM.GameMap
 >     }
 
 > data GameState = NoGame 
@@ -46,17 +51,17 @@ on the port specified.
 
 Designed to run in its own thread.
 
-> gameServer :: Int -> IO ()
-> gameServer port = do
+> gameServer :: Int -> TS.TileSet -> IO ()
+> gameServer port ts = do
 >     putStrLn "Initializing game server ..."
->     (runServer port) `catch`
+>     (runServer port ts) `catch`
 >         (\e -> (putStrLn $ "ERROR: Failed to listen on socket for clients! " ++ 
 >                    show e) >> return ())
 
 
 
-> runServer :: Int -> IO ()
-> runServer port = do
+> runServer :: Int -> TS.TileSet -> IO ()
+> runServer port ts = do
 >     incomingTC <-  newTChanIO
 >     clients <- newTVarIO $ DM.empty
 >     addrInfos <- getAddrInfo (Just (defaultHints {addrFlags = [AI_PASSIVE]}))
@@ -66,8 +71,12 @@ Designed to run in its own thread.
 >     bindSocket sock (addrAddress serveraddr)
 >     listen sock 5
 >     forkIO $ processIncomingCon sock 1 clients incomingTC
->
->     MTS.evalStateT gameServerLoop $ GameData incomingTC clients NoGame
+>     
+>     startingMap <- liftIO $ GM.makeRandomMap ts 30 30
+>     MTS.evalStateT gameServerLoop $ 
+>           GameData incomingTC clients NoGame ts startingMap
+>                    
+
 
 
 > processIncomingCon :: Socket ->               -- listening socket
@@ -79,7 +88,7 @@ Designed to run in its own thread.
 >     (conSock, conAddr) <- accept masterSock
 >     h <- socketToHandle conSock ReadWriteMode
 >     hSetBuffering h LineBuffering
->     let cci = GP.ClientConInfo h conAddr "" DM.empty
+>     let cci = GP.ClientConInfo h conAddr "" 
 >     outgoingTC <- newTChanIO 
 >     atomically $ modifyTVar_ clients (DM.insert nextID (cci, outgoingTC))
 
@@ -110,15 +119,6 @@ Designed to run in its own thread.
 >     packet <- atomically $ readTChan outgoingTC
 >     GP.sendPacket cci packet
 
-Will return immediately if it cannot creat the listening socket.
-
- gameServer :: Int -> IO ()
- gameServer port = 
-    (do ch <-GPL.makeListener port
-        putStrLn "gameServer initialized; socket ready for listening."
-        MTS.evalStateT gameServerLoop $ initialState ch) `catch`
-        (\e -> do putStrLn $ "Failed to make network listing socket! : " ++ show e
-                  return ())
 
 
 > gameServerLoop :: ServerStateIO ()
@@ -144,8 +144,26 @@ Will return immediately if it cannot creat the listening socket.
 >              then do
 >                MTS.put $ gd { gdGameState = InitializingGame }
 >                sendResponse clientId GP.InitGameResp "True"
+>                sendResponse clientId GP.VisibleMapUpdate $ TJ.encode $ gdGameMap gd
 >              else do
 >                sendResponse clientId GP.InitGameResp "False"
+>        GP.SetOptions -> do
+>            gd <- MTS.get
+>            if gdGameState gd /= InitializingGame
+>               then return ()
+>               else do
+>                 let optsE = TJ.decode (GP.gpJSONData gp) :: TJ.Result GP.GameOptions
+>                 case optsE of
+>                   TJ.Error err -> do liftIO $ putStrLn $ "ERROR: parsing game options packet: " 
+>                                                          ++ err
+>                                      return ()
+>                   TJ.Ok opts -> do
+>                     newMap <- liftIO $ GM.makeRandomMap (gdTileSet gd) 
+>                                                         (GP.goMapWidth opts)
+>                                                         (GP.goMapHeight opts)
+>                     MTS.put $ gd { gdGameMap = newMap }
+>                     sendResponse clientId GP.InitGameResp "True"
+>                     sendResponse clientId GP.VisibleMapUpdate $ TJ.encode newMap
 >        _ -> do return ()
 
 

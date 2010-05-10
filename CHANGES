@@ -5,6 +5,7 @@ Exit Strategy version history
 
 * FIXME: netbook's immediate maximise doesn't trigger a video resize.
 
+* Implemented :sgo mapsize <w> <h> in game construction
 * Basic TCP networking in place.
 * Added units to the tile set.
 * Implemented UI Actions and basics of a game state. UILayouts also

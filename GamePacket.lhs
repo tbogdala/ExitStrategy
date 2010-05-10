@@ -15,6 +15,7 @@ player to Server.
 > import System.IO
 
 > import Utils
+> import qualified GameMap as GM
 
 > currentProtocolID = 1
 > defaultPortNum = 45954 :: Int
@@ -25,11 +26,8 @@ player to Server.
 >     {
 >         cciSocket :: Handle,
 >         cciAddress :: SockAddr,
->         cciClientName :: String,
->         cciCallbacks :: DM.Map PacketCommand [PacketCallback]
+>         cciClientName :: String
 >     } 
-
-> type PacketCallback = (ClientConInfo -> GamePacket -> IO ())
 
 
 > data GamePacket = GamePacket
@@ -40,17 +38,23 @@ player to Server.
 
 > data PacketCommand = InitGameReq
 >                    | InitGameResp
->                    | RequestAsPlayer
 >                    | SetOptions
+>                    | OptionsUpdate
 >                    | Chat
+>                    | ChatUpdate
 >                    | GetVisibleMap
+>                    | VisibleMapUpdate
 >                    | GetVisibleUnits
+>                    | VisibleUnitsUpdate
 >                    | MoveUnit
 >                    | EndTurn
 >    deriving (Eq, Show, Enum, Ord)
 
 
+
 > data GPBoolResp = GPBoolResp Bool
+>                 
+
 > instance JSON GPBoolResp where
 >    showJSON (GPBoolResp br) = makeObj
 >        [ ("Response", showJSON br) ]
@@ -62,9 +66,32 @@ player to Server.
 
 
 
+> data GameOptions = GameOptions
+>    {  
+>        goMapWidth :: Int,
+>        goMapHeight ::  Int
+>    }
+
+> instance JSON GameOptions where
+>    showJSON go = makeObj
+>        [ ("MapWidth", showJSON $ goMapWidth go) 
+>        , ("MapHeight", showJSON $ goMapHeight go)
+>        ]
+>
+>    readJSON (JSObject obj) = do
+>        let objA = fromJSObject obj
+>        mw <- lookupM "MapWidth" objA >>= readJSON
+>        mh <- lookupM "MapHeight" objA >>= readJSON
+>        return $ GameOptions mw mh
+
+
 > createNewPacket :: PacketCommand -> String -> GamePacket
 > createNewPacket pc json = GamePacket pc json
 
+> createPacketSetOptions :: GameOptions -> GamePacket
+> createPacketSetOptions go =
+>     let json = encode go
+>     in createNewPacket SetOptions json
 
 
 
@@ -76,7 +103,7 @@ player to Server.
 >     connect sock (addrAddress serveraddr)
 >     h <- socketToHandle sock ReadWriteMode
 >     hSetBuffering h LineBuffering
->     return $ ClientConInfo h (addrAddress serveraddr) playerName DM.empty
+>     return $ ClientConInfo h (addrAddress serveraddr) playerName 
 
 
 
@@ -114,15 +141,6 @@ player to Server.
 >        Error err -> Left $ "Error parsing game packet: " ++ err
 
 
-> registerCallback :: ClientConInfo -> PacketCommand -> PacketCallback -> ClientConInfo
-> registerCallback cci command cb = 
->     let cbmap = cciCallbacks cci
->         existingM = DM.lookup command cbmap
->         newcbs = if isNothing existingM
->                    then [cb]
->                    else [cb] ++ (fromJust existingM)
->         newcbmap = DM.insert command newcbs cbmap
->     in cci { cciCallbacks = newcbmap }
 
 
 

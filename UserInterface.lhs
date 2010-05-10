@@ -18,6 +18,7 @@ This is the main file for the user interface components.
 > import Control.Monad.Trans.Class (lift)
 > import Control.Monad (filterM)
 > import Control.Concurrent.Chan
+> import qualified Text.JSON as TJ
 
 > import Utils
 > import UITypes
@@ -27,6 +28,8 @@ This is the main file for the user interface components.
 > import qualified Server as Server
 > import qualified GameMap as GM
 > import qualified UIConsole as UIC
+
+
 
 This is the data that will be housed in the state.
 
@@ -39,10 +42,19 @@ This is the data that will be housed in the state.
 >         uisLoadedRes :: DM.Map String SDL.Surface,
 >         uisCurrentLayout :: UILayout ,
 >         uisQuitting :: Bool,
->         uisPlayerCons :: DM.Map Int GP.ClientConInfo, -- key is client ID
+>         uisPlayers :: [NetworkedPlayer],
 >         uisGameMap :: GM.GameMap,
 >         uisConsole :: UIConsole
 >     } 
+
+> data NetworkedPlayer = NetworkedPlayer
+>     {
+>         npClientConInfo :: GP.ClientConInfo,
+>         npNetCallbacks :: DM.Map GP.PacketCommand [PacketCallback]
+>     }
+
+> type PacketCallback = (NetworkedPlayer -> GP.GamePacket -> UIStateIO ())
+
 
 This determines the location of the UIWidget.
 
@@ -142,8 +154,6 @@ All possible main game states.
 
 > uiDefaultKH :: SDL.Keysym -> UIStateIO ()
 > uiDefaultKH ks = do
->     uis <- MTS.get
->     MTS.put $ uis { uisQuitting = True } 
 >     return ()
 > uiDefaultLMBH :: Int -> Int -> SDL.MouseButton -> UIStateIO ()
 > uiDefaultLMBH x y b = do 
@@ -186,7 +196,26 @@ Adds the command string to the log.
 >     uis <- MTS.get
 >     let c' = UIC.addLineToLog "Quitting game!" $ uisConsole uis
 >     MTS.put $ uis { uisConsole = c', uisQuitting = True }
-
+> runCommand (":sgo" : cmd : args) = do
+>     case cmd of
+>      "mapsize" -> 
+>         if length args < 2 
+>           then return ()
+>           else do
+>             uis <- MTS.get
+>             let (ws:hs:_) = args
+>                 mw = maybeReadInt ws
+>                 mh = maybeReadInt hs
+>             if (isNothing mw) || (isNothing mh)
+>               then do
+>                 let c' = UIC.addLineToLog "Bad parameters. (:sgo mapsize Int Int)" $
+>                              uisConsole uis
+>                     uis' = uis { uisConsole = c' }
+>                 MTS.put uis'
+>               else do   
+>                 let np = currentPlayer uis
+>                     gp = GP.createPacketSetOptions $ GP.GameOptions (fromJust mw) (fromJust mh)
+>                 liftIO $ GP.sendPacket (npClientConInfo np) gp
 
 
 
@@ -220,18 +249,29 @@ Adds the command string to the log.
 >             return () 
 >         StartHotSeatGame -> do
 >             cci <- liftIO $ GP.openServerConnection "localhost" GP.defaultPortNum "Player1"
+>             let np = registerCallback GP.InitGameResp testCallback $ 
+>                      registerCallback GP.VisibleMapUpdate netMapUpdateCallback $
+>                      NetworkedPlayer cci DM.empty
 >             let gp = GP.createNewPacket GP.InitGameReq ""
->             let cci' = GP.registerCallback cci GP.InitGameResp testCallback
->             liftIO $ GP.sendPacket cci' gp
->             let pcs = uisPlayerCons uis
->             MTS.put $ uis { uisPlayerCons = DM.insert 0 cci' pcs,
+>             liftIO $ GP.sendPacket cci gp
+>             let pcs = uisPlayers uis
+>             MTS.put $ uis { uisPlayers = [np] ++ pcs,
 >                             uisCurrentLayout = gameLayout  }
 >             return ()
 
-> testCallback :: GP.ClientConInfo -> GP.GamePacket -> IO ()
-> testCallback cci gp = do
->     putStrLn "GOT INITGAMERESP!" 
+> testCallback :: NetworkedPlayer -> GP.GamePacket -> UIStateIO ()
+> testCallback np gp = do
+>     liftIO $ putStrLn "GOT INITGAMERESP!" 
 
+> netMapUpdateCallback :: NetworkedPlayer -> GP.GamePacket -> UIStateIO ()
+> netMapUpdateCallback np gp = do
+>     uis <- MTS.get
+>     let gmE = TJ.decode $ GP.gpJSONData gp :: TJ.Result GM.GameMap
+>     case gmE of
+>       TJ.Ok gm -> do MTS.put $ uis { uisGameMap = gm }
+>                      liftIO $ putStrLn "INFO: Client UI updated game map."
+>       TJ.Error err -> liftIO $ putStrLn $ "ERROR: UI couldn't parse map update packet. " ++ err
+     
 
 
 > getWidgetsForClick :: UILayout -> Int -> Int -> UIStateIO ([UIWidget])
@@ -375,5 +415,18 @@ loads it into the state and returns the newly loaded surface.
            
 
 
+> registerCallback :: GP.PacketCommand -> PacketCallback -> NetworkedPlayer -> NetworkedPlayer
+> registerCallback command cb np = 
+>     let cbmap = npNetCallbacks np
+>         existingM = DM.lookup command cbmap
+>         newcbs = if isNothing existingM
+>                    then [cb]
+>                    else [cb] ++ (fromJust existingM)
+>         newcbmap = DM.insert command newcbs cbmap
+>     in np { npNetCallbacks = newcbmap }
 
 
+Simple definition to codify the fact that the first player
+in the list is considered the active one for the user interface.
+
+> currentPlayer uis = head $ uisPlayers uis

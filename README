@@ -7,17 +7,25 @@ Project Status: PRE-ALPHA
 What is this?
 =============
 
-Exit Strategy is a simple Haskell project that intends to be a turn-based strategy game, using SDL for 2d hex-tile graphics, with multi player ability and AI for single player.
-
-Right now, strat barely does anything. It's the focus of my SDL game series on my blog where I discuss how I implemented it, from start to finish. I hope it will serve as a useful guide to practical game programming in Haskell and, secondarilly, as a decent example of code to learn from.
-
-You can read more on my blog, starting with the first part of the series:
+Exit Strategy is a simple Haskell project that intends to be a turn-based strategy game, using SDL for 2d hex-tile graphics, with multi player ability and AI for single player. You can read more on my blog, starting with the first part of the series:
 http://www.animal-machine.com/blog/exit-strategy
 
 
+For right now, it implements a basic map editor (exitstrategy-editor) and the beginings of a client (exitstrategy). The only supported game mode right now is Hot Seat multiplayer. Even then, it doesn't quite start the game.
 
-Input Commands
-==============
+Main Client Input Commands
+==========================
+
+Console functions:
+
+After first starting a hot seat game, you can issue these commands in the game console before starting the game:
+
+:sgo mapsize <w> <h>
+    changes the game map size
+
+
+MAP EDITOR Input Commands
+=========================
 
 Key	         -> Action
 ---------------------------
@@ -49,7 +57,6 @@ Console functions:
     loads a map from a file in the 'maps' sub-directory with the name
     <fn.map>
     (e.g. ":loadmap test" loads from $HOME/.ExitStrategy/maps/test.map)
-
 
 
 
